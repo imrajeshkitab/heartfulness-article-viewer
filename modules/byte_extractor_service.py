@@ -9,18 +9,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from config import MONGODB_URL, DB_NAME, COLLECTION_NAME
-    logger.info("Configuration loaded successfully")
+    logger.info("Configuration loaded successfully from config.py")
 except ImportError:
-    # Fallback for local development
+    # Fallback for when config.py is not available
+    logger.info("config.py not found, using direct environment variable access")
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv()  # This will silently fail if .env doesn't exist, which is fine
+    
     MONGODB_URL = os.getenv("MONGODB_URL")
     DB_NAME = "kitab_prod"
     COLLECTION_NAME = "extracted_wisdom_byte"
     
     if not MONGODB_URL:
         logger.error("MONGODB_URL not found in environment variables")
-        raise ValueError("MONGODB_URL environment variable is required")
+        raise ValueError(
+            "MONGODB_URL environment variable is required. "
+            "Please set it in Hugging Face Spaces secrets or create a .env file for local development."
+        )
     
     logger.info("Using fallback configuration from environment variables")
 

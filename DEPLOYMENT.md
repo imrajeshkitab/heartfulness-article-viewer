@@ -15,7 +15,7 @@ This guide will help you deploy the Heartfulness Article Viewer app on Hugging F
 3. Fill in the details:
    - **Space name**: `heartfulness-article-viewer`
    - **License**: MIT
-   - **SDK**: Streamlit
+   - **SDK**: Docker
    - **Hardware**: CPU Basic (free tier)
    - **Visibility**: Public
 
@@ -57,6 +57,23 @@ This guide will help you deploy the Heartfulness Article Viewer app on Hugging F
 1. Your app will be available at: `https://huggingface.co/spaces/imrajeshkr/heartfulness-article-viewer`
 2. Check the logs to ensure everything is working correctly
 3. Test the app functionality
+
+## Docker-Specific Notes
+
+### Build Process
+- Hugging Face will automatically build your Docker image
+- The build process may take 5-10 minutes
+- Check the "Logs" tab for build progress
+
+### Port Configuration
+- The app runs on port 8501 inside the container
+- Hugging Face automatically maps this to the public URL
+- Health checks ensure the app is running properly
+
+### Environment Variables
+- All environment variables are available inside the container
+- MongoDB connection will work seamlessly
+- Logs are written to the `/app/logs` directory
 
 ## Security Notes
 

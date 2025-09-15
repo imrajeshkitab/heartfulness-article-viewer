@@ -1,15 +1,20 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env file (if it exists)
+# This is for local development only
 load_dotenv()
 
 # MongoDB Configuration
+# Priority: 1. Environment variable, 2. .env file, 3. Error
 MONGODB_URL = os.getenv("MONGODB_URL")
 
 # Validate required environment variables
 if not MONGODB_URL:
-    raise ValueError("MONGODB_URL environment variable is required")
+    raise ValueError(
+        "MONGODB_URL environment variable is required. "
+        "Please set it in Hugging Face Spaces secrets or create a .env file for local development."
+    )
 
 # Database Configuration
 DB_NAME = "kitab_prod"

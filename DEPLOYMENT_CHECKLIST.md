@@ -31,7 +31,7 @@
 3. Fill in:
    - **Space name**: `heartfulness-article-viewer`
    - **License**: MIT
-   - **SDK**: Streamlit
+   - **SDK**: Docker
    - **Hardware**: CPU Basic
    - **Visibility**: Public
 
@@ -74,6 +74,8 @@ git push -u origin main
 ```
 heartfulness-article-viewer/
 ├── README.md                    # Space metadata
+├── Dockerfile                   # Docker configuration
+├── .dockerignore               # Docker ignore rules
 ├── requirements.txt             # Python dependencies
 ├── packages.txt                 # System dependencies
 ├── app.py                      # Main entry point
