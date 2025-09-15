@@ -1,4 +1,3 @@
-# Core dependencies for View functionality
 streamlit>=1.49.1
 pymongo>=4.0.0
 python-dotenv>=1.0.0
