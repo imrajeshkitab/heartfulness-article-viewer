@@ -3,7 +3,7 @@ Main entry point for Hugging Face Spaces deployment
 This file redirects to the actual Streamlit app
 """
 
-import streamlit as st
+import subprocess
 import sys
 import os
 from pathlib import Path
@@ -12,5 +12,9 @@ from pathlib import Path
 pages_dir = Path(__file__).parent / "pages"
 sys.path.insert(0, str(pages_dir))
 
-# Import and run the main app
-from byte_extractor_app import *
+# Run the Streamlit app with the correct port for Hugging Face Spaces
+subprocess.run([
+    sys.executable, "-m", "streamlit", "run", "pages/byte_extractor_app.py",
+    "--server.port", "7860",  # Hugging Face Spaces default port
+    "--server.address", "0.0.0.0"
+])
