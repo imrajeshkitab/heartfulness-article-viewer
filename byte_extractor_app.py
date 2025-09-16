@@ -6,10 +6,16 @@ from pathlib import Path
 # Add current directory to Python path to find modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from byte_extractor_service import (
-    collection, get_paginated_bytes_with_query, update_summary_review_status, update_original_article_review_status
-)
-from logger_config import logger
+# Import the modules directly
+import byte_extractor_service
+import logger_config
+
+# Get the required functions and variables
+collection = byte_extractor_service.collection
+get_paginated_bytes_with_query = byte_extractor_service.get_paginated_bytes_with_query
+update_summary_review_status = byte_extractor_service.update_summary_review_status
+update_original_article_review_status = byte_extractor_service.update_original_article_review_status
+logger = logger_config.logger
 
 # -------------------------
 # Streamlit Page Config
