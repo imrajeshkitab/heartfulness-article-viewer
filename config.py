@@ -18,7 +18,7 @@ if not MONGODB_URL:
 
 # Database Configuration
 DB_NAME = "kitab_prod"
-COLLECTION_NAME = "extracted_wisdom_byte"
+COLLECTION_NAME = "HFN_raw_articles"
 
 # App Configuration
 APP_TITLE = "Heartfulness Article Viewer"

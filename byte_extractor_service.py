@@ -18,7 +18,7 @@ except ImportError:
     
     MONGODB_URL = os.getenv("MONGODB_URL")
     DB_NAME = "kitab_prod"
-    COLLECTION_NAME = "extracted_wisdom_byte"
+    COLLECTION_NAME = "HFN_raw_articles"
     
     if not MONGODB_URL:
         logger.error("MONGODB_URL not found in environment variables")
