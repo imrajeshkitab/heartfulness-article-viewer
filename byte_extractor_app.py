@@ -92,54 +92,88 @@ if page == "📂 View Extracted Articles":
         st.warning("No year data found in the database")
         logger.warning("No year data found in the database")
     
-    # Second dropdown: Have Summary (based on selected year)
-    if selected_year != "All Years":
-        logger.info(f"Processing summary filter for year: {selected_year}")
-        # Filter documents by selected year
-        year_query = {"Year": selected_year}
-        logger.debug(f"Year query: {year_query}")
-        year_docs = list(collection.find(year_query, {"content_summary": 1, "pdf_name": 1}))
-        logger.info(f"Found {len(year_docs)} documents for year {selected_year}")
-        
-        # Count documents with and without content_summary
-        has_summary_count = sum(1 for doc in year_docs if doc.get('content_summary'))
-        no_summary_count = len(year_docs) - has_summary_count
-        logger.info(f"Summary counts - Has summary: {has_summary_count}, No summary: {no_summary_count}")
-        
-        summary_options = []
-        if has_summary_count > 0:
-            summary_options.append(f"✅ Yes ({has_summary_count} articles)")
-        if no_summary_count > 0:
-            summary_options.append(f"❌ No ({no_summary_count} articles)")
-        
-        if summary_options:
-            selected_summary = st.selectbox("📝 Have Summary:", ["All"] + summary_options)
-            logger.info(f"Summary filter selected: {selected_summary}")
-        else:
-            selected_summary = "All"
-            st.warning(f"No articles found for year {selected_year}")
-            logger.warning(f"No articles found for year {selected_year}")
+    # Second dropdown: Have Summary (independent of year selection)
+    logger.info("Processing summary filter across all years")
+    
+    # Build base query for summary counting (excluding year filter)
+    base_query = {}
+    if selected_authors:
+        base_query["Author"] = {"$in": selected_authors}
+    
+    # Count documents with and without content_summary across all years
+    logger.debug(f"Base query for summary counting: {base_query}")
+    all_docs = list(collection.find(base_query, {"content_summary": 1}))
+    logger.info(f"Found {len(all_docs)} documents for summary counting")
+    
+    # Count documents with and without content_summary
+    has_summary_count = sum(1 for doc in all_docs if doc.get('content_summary'))
+    no_summary_count = len(all_docs) - has_summary_count
+    logger.info(f"Summary counts - Has summary: {has_summary_count}, No summary: {no_summary_count}")
+    
+    summary_options = []
+    if has_summary_count > 0:
+        summary_options.append(f"✅ Yes ({has_summary_count} articles)")
+    if no_summary_count > 0:
+        summary_options.append(f"❌ No ({no_summary_count} articles)")
+    
+    if summary_options:
+        selected_summary = st.selectbox("📝 Have Summary:", ["All"] + summary_options)
+        logger.info(f"Summary filter selected: {selected_summary}")
     else:
         selected_summary = "All"
-        logger.info("No year selected, summary filter set to 'All'")
+        st.warning("No articles found in the database")
+        logger.warning("No articles found in the database")
     
-    # Third dropdown: Available Editions (based on year and summary selection)
-    if selected_year != "All Years" and selected_summary != "All":
-        logger.info(f"Processing PDF selection for year: {selected_year}, summary: {selected_summary}")
-        # Determine if we want articles with or without summary
-        want_summary = selected_summary.startswith("✅")
-        logger.info(f"Want summary: {want_summary}")
+    # Third dropdown: Available Editions (based on ALL selected filters)
+    # Check if any filters are applied
+    any_filters_applied = (
+        selected_authors or 
+        summary_status_filter != "All" or 
+        selected_year != "All Years" or 
+        selected_summary != "All"
+    )
+    
+    if any_filters_applied:
+        logger.info(f"Processing PDF selection with filters - Authors: {selected_authors}, Status: {summary_status_filter}, Year: {selected_year}, Summary: {selected_summary}")
         
-        # Build query based on selections
-        query = {"Year": selected_year}
-        if want_summary:
-            query["content_summary"] = {"$exists": True, "$ne": ""}
-        else:
-            query["$or"] = [
-                {"content_summary": {"$exists": False}},
-                {"content_summary": ""},
-                {"content_summary": None}
-            ]
+        # Build comprehensive query based on ALL selections
+        query = {}
+        
+        # Add author filter if selected
+        if selected_authors:
+            query["Author"] = {"$in": selected_authors}
+        
+        # Add year filter if selected
+        if selected_year != "All Years":
+            query["Year"] = selected_year
+        
+        # Add summary filter if selected
+        if selected_summary != "All":
+            want_summary = selected_summary.startswith("✅")
+            logger.info(f"Want summary: {want_summary}")
+            if want_summary:
+                query["content_summary"] = {"$exists": True, "$ne": ""}
+            else:
+                query["$or"] = [
+                    {"content_summary": {"$exists": False}},
+                    {"content_summary": ""},
+                    {"content_summary": None}
+                ]
+        
+        # Add summary review status filter if selected
+        if summary_status_filter != "All":
+            if summary_status_filter == "🟡 Pending":
+                query["$or"] = [
+                    {"summary_review_status": {"$exists": False}},
+                    {"summary_review_status": None},
+                    {"summary_review_status": ""},
+                    {"summary_review_status": "pending"}
+                ]
+            elif summary_status_filter == "🟢 Accepted":
+                query["summary_review_status"] = "accepted"
+            elif summary_status_filter == "🔴 Rejected":
+                query["summary_review_status"] = "rejected"
+        
         logger.debug(f"PDF selection query: {query}")
         
         # Get unique pdf_names for the filtered documents
@@ -155,7 +189,7 @@ if page == "📂 View Extracted Articles":
             logger.warning("No editions found matching the selected criteria")
     else:
         # Fallback to original behavior when no specific filters are applied
-        logger.info("Using fallback PDF selection (no year/summary filters)")
+        logger.info("Using fallback PDF selection (no filters applied)")
         pdf_names = collection.distinct("pdf_name")
         logger.info(f"Found {len(pdf_names)} total PDFs: {pdf_names}")
         selected_pdf = st.selectbox("📚 Select PDF:", ["All"] + pdf_names)
@@ -225,8 +259,8 @@ if page == "📂 View Extracted Articles":
             status_conditions = [{"summary_review_status": "rejected"}]
             logger.debug("Rejected status condition: exact match 'rejected'")
     
-    # Apply summary filter
-    if selected_year != "All Years" and selected_summary != "All":
+    # Apply summary filter (independent of year selection)
+    if selected_summary != "All":
         logger.info(f"Applying summary filter: {selected_summary}")
         want_summary = selected_summary.startswith("✅")
         if want_summary:
