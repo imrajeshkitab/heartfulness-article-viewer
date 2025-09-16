@@ -79,6 +79,7 @@ def get_paginated_bytes_with_query(query: dict, page_number: int, page_size: int
         result = {
             "page_number": page_number,
             "total_pages": total_pages,
+            "total_docs": total_docs,
             "docs": docs
         }
         
@@ -90,6 +91,7 @@ def get_paginated_bytes_with_query(query: dict, page_number: int, page_size: int
         return {
             "page_number": 1,
             "total_pages": 0,
+            "total_docs": 0,
             "docs": []
         }
 
@@ -133,4 +135,46 @@ def update_summary_review_status(article_id: str, status: str) -> bool:
         
     except Exception as e:
         logger.error(f"Error updating summary review status for article {article_id}: {e}", exc_info=True)
+        return False
+
+
+def update_original_article_review_status(article_id: str, status: str) -> bool:
+    """
+    Update the original article review status in MongoDB.
+    
+    Args:
+        article_id (str): MongoDB document _id
+        status (str): "accepted" or "rejected"
+        
+    Returns:
+        bool: True if update successful, False otherwise
+    """
+    logger.info(f"Updating original article review status for article {article_id} to '{status}'")
+    
+    try:
+        from bson import ObjectId
+        
+        # Convert string ID to ObjectId
+        logger.debug(f"Converting article_id '{article_id}' to ObjectId")
+        object_id = ObjectId(article_id)
+        
+        # Update the document
+        logger.info(f"Executing MongoDB update operation for original article review status")
+        result = collection.update_one(
+            {"_id": object_id},
+            {"$set": {"orgnl_artcl_rv_sts": status}}
+        )
+        
+        success = result.modified_count > 0
+        logger.info(f"Update result - Modified count: {result.modified_count}, Success: {success}")
+        
+        if success:
+            logger.info(f"Successfully updated article {article_id} original article review status to '{status}'")
+        else:
+            logger.warning(f"No documents were modified for article {article_id}")
+        
+        return success
+        
+    except Exception as e:
+        logger.error(f"Error updating original article review status for article {article_id}: {e}", exc_info=True)
         return False

@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from byte_extractor_service import (
-    collection, get_paginated_bytes_with_query, update_summary_review_status
+    collection, get_paginated_bytes_with_query, update_summary_review_status, update_original_article_review_status
 )
 from logger_config import logger
 
@@ -45,7 +45,25 @@ if page == "📂 View Extracted Articles":
     st.markdown("### 🔍 Search & Filter Articles")
     logger.info("Setting up search and filter section")
     
-    # Summary Review Status Filter
+    # First row: Author multi-select filter
+    logger.info("Fetching available authors from database")
+    available_authors = sorted(collection.distinct("Author"))
+    logger.info(f"Found {len(available_authors)} authors: {available_authors}")
+    
+    if available_authors:
+        selected_authors = st.multiselect(
+            "✍️ Select Authors:",
+            available_authors,
+            default=[],
+            help="Select one or more authors to filter articles. Leave empty to show all authors."
+        )
+        logger.info(f"Selected authors: {selected_authors}")
+    else:
+        selected_authors = []
+        st.warning("No author data found in the database")
+        logger.warning("No author data found in the database")
+    
+    # Second row: Other filters
     col1, col2, col3 = st.columns(3)
     with col1:
         summary_status_filter = st.selectbox(
@@ -174,6 +192,13 @@ if page == "📂 View Extracted Articles":
     # Build conditions for different filters
     status_conditions = []
     summary_conditions = []
+    author_conditions = []
+    
+    # Apply author filter
+    if selected_authors:
+        logger.info(f"Applying author filter: {selected_authors}")
+        author_conditions = [{"Author": {"$in": selected_authors}}]
+        logger.debug(f"Author condition: Author in {selected_authors}")
     
     # Apply summary review status filter
     if summary_status_filter != "All":
@@ -211,6 +236,14 @@ if page == "📂 View Extracted Articles":
     
     # Combine conditions using $and with $or arrays
     and_conditions = []
+    
+    if author_conditions:
+        if len(author_conditions) == 1:
+            and_conditions.append(author_conditions[0])
+            logger.debug("Added single author condition")
+        else:
+            and_conditions.append({"$or": author_conditions})
+            logger.debug(f"Added $or author conditions: {len(author_conditions)} conditions")
     
     if status_conditions:
         if len(status_conditions) == 1:
@@ -256,31 +289,46 @@ if page == "📂 View Extracted Articles":
     result = get_paginated_bytes_with_query(final_query, st.session_state.page_number)
     total_pages = result["total_pages"]
     articles = result["docs"]
-    logger.info(f"Retrieved {len(articles)} articles for page {result['page_number']} of {total_pages}")
+    total_articles = result.get("total_docs", 0)  # Get total count of articles matching the query
+    logger.info(f"Retrieved {len(articles)} articles for page {result['page_number']} of {total_pages} (Total: {total_articles})")
 
     # Show current filter status
-    if final_query:
+    if final_query or selected_authors:
         logger.info("Displaying active filter information")
         filter_info = []
-        if "summary_review_status" in final_query:
-            status_display = {
-                "pending": "🟡 Pending",
-                "accepted": "🟢 Accepted",
-                "rejected": "🔴 Rejected"
-            }.get(final_query["summary_review_status"], final_query["summary_review_status"])
-            filter_info.append(f"📊 Status: {status_display}")
-        if "Year" in final_query:
-            filter_info.append(f"📅 Year: {final_query['Year']}")
-        if "content_summary" in final_query:
-            filter_info.append("📝 Has Summary: Yes")
-        elif "$or" in final_query:
-            filter_info.append("📝 Has Summary: No")
-        if "pdf_name" in final_query:
-            filter_info.append(f"📚 Edition: {final_query['pdf_name']}")
+        
+        # Show selected authors
+        if selected_authors:
+            authors_display = ", ".join(selected_authors) if len(selected_authors) <= 3 else f"{', '.join(selected_authors[:3])} +{len(selected_authors)-3} more"
+            filter_info.append(f"✍️ Authors: {authors_display}")
+        
+        # Show other filters from final_query
+        if final_query:
+            if "summary_review_status" in final_query:
+                status_display = {
+                    "pending": "🟡 Pending",
+                    "accepted": "🟢 Accepted",
+                    "rejected": "🔴 Rejected"
+                }.get(final_query["summary_review_status"], final_query["summary_review_status"])
+                filter_info.append(f"📊 Status: {status_display}")
+            if "Year" in final_query:
+                filter_info.append(f"📅 Year: {final_query['Year']}")
+            if "content_summary" in final_query:
+                filter_info.append("📝 Has Summary: Yes")
+            elif "$or" in final_query:
+                filter_info.append("📝 Has Summary: No")
+            if "pdf_name" in final_query:
+                filter_info.append(f"📚 Edition: {final_query['pdf_name']}")
         
         if filter_info:
+            # Add total articles count to the filter info
+            filter_info.append(f"📊 Total: {total_articles} articles")
             st.info("🔍 **Active Filters:** " + " | ".join(filter_info))
             logger.info(f"Active filters displayed: {' | '.join(filter_info)}")
+        else:
+            # Even if no filters, show total count
+            st.info(f"📊 **Total Articles:** {total_articles}")
+            logger.info(f"Total articles displayed: {total_articles}")
 
     # Page info (centered)
     st.markdown(
@@ -397,6 +445,80 @@ if page == "📂 View Extracted Articles":
                 with st.expander("Read Content"):
                     st.write(article.get("Content", ""))
                     logger.debug(f"Article {i+1} content displayed")
+                    
+                    # Show current original article review status
+                    current_article_status = article.get('orgnl_artcl_rv_sts', 'pending')
+                    status_color = {
+                        'accepted': '🟢',
+                        'rejected': '🔴', 
+                        'pending': '🟡'
+                    }.get(current_article_status, '🟡')
+                    
+                    st.markdown(f"**Original Article Review Status:** {status_color} {current_article_status.title()}")
+                    logger.debug(f"Article {i+1} original article review status: {current_article_status}")
+                    
+                    # Accept/Reject buttons for original article
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("✅ Accept Article", key=f"accept_article_{article.get('_id')}", type="primary"):
+                            logger.info(f"Accept article button clicked for article {article.get('_id')}")
+                            st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = True
+                    
+                    with col2:
+                        if st.button("❌ Reject Article", key=f"reject_article_{article.get('_id')}", type="secondary"):
+                            logger.info(f"Reject article button clicked for article {article.get('_id')}")
+                            st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = True
+                    
+                    # Accept article confirmation dialog
+                    if st.session_state.get(f"show_accept_article_confirm_{article.get('_id')}", False):
+                        logger.info(f"Showing accept article confirmation dialog for article {article.get('_id')}")
+                        st.warning("⚠️ Are you sure you want to accept this original article?")
+                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                        
+                        with confirm_col1:
+                            if st.button("✅ Yes, Accept", key=f"yes_accept_article_{article.get('_id')}", type="primary"):
+                                logger.info(f"User confirmed article acceptance for article {article.get('_id')}")
+                                success = update_original_article_review_status(str(article.get('_id')), "accepted")
+                                if success:
+                                    st.success("✅ Original article accepted successfully!")
+                                    logger.info(f"Successfully accepted original article {article.get('_id')}")
+                                    st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = False
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Failed to update article status. Please try again.")
+                                    logger.error(f"Failed to accept original article {article.get('_id')}")
+                        
+                        with confirm_col2:
+                            if st.button("❌ No, Cancel", key=f"no_accept_article_{article.get('_id')}"):
+                                logger.info(f"User cancelled article acceptance for article {article.get('_id')}")
+                                st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = False
+                                st.rerun()
+                    
+                    # Reject article confirmation dialog
+                    if st.session_state.get(f"show_reject_article_confirm_{article.get('_id')}", False):
+                        logger.info(f"Showing reject article confirmation dialog for article {article.get('_id')}")
+                        st.warning("⚠️ Are you sure you want to reject this original article?")
+                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                        
+                        with confirm_col1:
+                            if st.button("✅ Yes, Reject", key=f"yes_reject_article_{article.get('_id')}", type="primary"):
+                                logger.info(f"User confirmed article rejection for article {article.get('_id')}")
+                                success = update_original_article_review_status(str(article.get('_id')), "rejected")
+                                if success:
+                                    st.success("❌ Original article rejected successfully!")
+                                    logger.info(f"Successfully rejected original article {article.get('_id')}")
+                                    st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = False
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Failed to update article status. Please try again.")
+                                    logger.error(f"Failed to reject original article {article.get('_id')}")
+                        
+                        with confirm_col2:
+                            if st.button("❌ No, Cancel", key=f"no_reject_article_{article.get('_id')}"):
+                                logger.info(f"User cancelled article rejection for article {article.get('_id')}")
+                                st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = False
+                                st.rerun()
                 
                 # Show LLM Review if article has been reviewed
                 if article.get('reviewed_by_llm') == 1 and article.get('llm_review'):
