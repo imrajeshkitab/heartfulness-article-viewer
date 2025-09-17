@@ -70,7 +70,7 @@ if page == "📂 View Extracted Articles":
         logger.warning("No author data found in the database")
     
     # Second row: Other filters
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         summary_status_filter = st.selectbox(
             "📊 Summary Review Status:",
@@ -78,6 +78,14 @@ if page == "📂 View Extracted Articles":
             help="Filter articles by their summary review status"
         )
         logger.info(f"Summary status filter selected: {summary_status_filter}")
+    
+    with col2:
+        original_article_status_filter = st.selectbox(
+            "📄 Original Article Review Status:",
+            ["All", "🟡 Pending", "🟢 Accepted", "🔴 Rejected"],
+            help="Filter articles by their original article review status"
+        )
+        logger.info(f"Original article status filter selected: {original_article_status_filter}")
     
     # First dropdown: Year
     logger.info("Fetching available years from database")
@@ -129,12 +137,13 @@ if page == "📂 View Extracted Articles":
     any_filters_applied = (
         selected_authors or 
         summary_status_filter != "All" or 
+        original_article_status_filter != "All" or
         selected_year != "All Years" or 
         selected_summary != "All"
     )
     
     if any_filters_applied:
-        logger.info(f"Processing PDF selection with filters - Authors: {selected_authors}, Status: {summary_status_filter}, Year: {selected_year}, Summary: {selected_summary}")
+        logger.info(f"Processing PDF selection with filters - Authors: {selected_authors}, Summary Status: {summary_status_filter}, Original Article Status: {original_article_status_filter}, Year: {selected_year}, Summary: {selected_summary}")
         
         # Build comprehensive query based on ALL selections
         query = {}
@@ -173,6 +182,20 @@ if page == "📂 View Extracted Articles":
                 query["summary_review_status"] = "accepted"
             elif summary_status_filter == "🔴 Rejected":
                 query["summary_review_status"] = "rejected"
+        
+        # Add original article review status filter if selected
+        if original_article_status_filter != "All":
+            if original_article_status_filter == "🟡 Pending":
+                query["$or"] = [
+                    {"orgnl_artcl_rv_sts": {"$exists": False}},
+                    {"orgnl_artcl_rv_sts": None},
+                    {"orgnl_artcl_rv_sts": ""},
+                    {"orgnl_artcl_rv_sts": "pending"}
+                ]
+            elif original_article_status_filter == "🟢 Accepted":
+                query["orgnl_artcl_rv_sts"] = "accepted"
+            elif original_article_status_filter == "🔴 Rejected":
+                query["orgnl_artcl_rv_sts"] = "rejected"
         
         logger.debug(f"PDF selection query: {query}")
         
@@ -231,6 +254,7 @@ if page == "📂 View Extracted Articles":
     
     # Build conditions for different filters
     status_conditions = []
+    original_article_status_conditions = []
     summary_conditions = []
     author_conditions = []
     
@@ -258,6 +282,25 @@ if page == "📂 View Extracted Articles":
         elif summary_status_filter == "🔴 Rejected":
             status_conditions = [{"summary_review_status": "rejected"}]
             logger.debug("Rejected status condition: exact match 'rejected'")
+    
+    # Apply original article review status filter
+    if original_article_status_filter != "All":
+        logger.info(f"Applying original article review status filter: {original_article_status_filter}")
+        if original_article_status_filter == "🟡 Pending":
+            # For pending, include articles that don't have the field or have "pending" status
+            original_article_status_conditions = [
+                {"orgnl_artcl_rv_sts": {"$exists": False}},
+                {"orgnl_artcl_rv_sts": None},
+                {"orgnl_artcl_rv_sts": ""},
+                {"orgnl_artcl_rv_sts": "pending"}
+            ]
+            logger.debug("Original article pending status conditions: includes missing, null, empty, and 'pending' status")
+        elif original_article_status_filter == "🟢 Accepted":
+            original_article_status_conditions = [{"orgnl_artcl_rv_sts": "accepted"}]
+            logger.debug("Original article accepted status condition: exact match 'accepted'")
+        elif original_article_status_filter == "🔴 Rejected":
+            original_article_status_conditions = [{"orgnl_artcl_rv_sts": "rejected"}]
+            logger.debug("Original article rejected status condition: exact match 'rejected'")
     
     # Apply summary filter (independent of year selection)
     if selected_summary != "All":
@@ -292,6 +335,14 @@ if page == "📂 View Extracted Articles":
         else:
             and_conditions.append({"$or": status_conditions})
             logger.debug(f"Added $or status conditions: {len(status_conditions)} conditions")
+    
+    if original_article_status_conditions:
+        if len(original_article_status_conditions) == 1:
+            and_conditions.append(original_article_status_conditions[0])
+            logger.debug("Added single original article status condition")
+        else:
+            and_conditions.append({"$or": original_article_status_conditions})
+            logger.debug(f"Added $or original article status conditions: {len(original_article_status_conditions)} conditions")
     
     if summary_conditions:
         if len(summary_conditions) == 1:
@@ -350,7 +401,14 @@ if page == "📂 View Extracted Articles":
                     "accepted": "🟢 Accepted",
                     "rejected": "🔴 Rejected"
                 }.get(final_query["summary_review_status"], final_query["summary_review_status"])
-                filter_info.append(f"📊 Status: {status_display}")
+                filter_info.append(f"📊 Summary Status: {status_display}")
+            if "orgnl_artcl_rv_sts" in final_query:
+                original_status_display = {
+                    "pending": "🟡 Pending",
+                    "accepted": "🟢 Accepted",
+                    "rejected": "🔴 Rejected"
+                }.get(final_query["orgnl_artcl_rv_sts"], final_query["orgnl_artcl_rv_sts"])
+                filter_info.append(f"📄 Article Status: {original_status_display}")
             if "Year" in final_query:
                 filter_info.append(f"📅 Year: {final_query['Year']}")
             if "content_summary" in final_query:
