@@ -569,16 +569,127 @@ if page == "📂 View Extracted Articles":
                         st.session_state[edit_title_key] = True
                         st.rerun()
                 
-                # Display Best Byte status
+                # Display Best Byte status with edit functionality
                 best_byte_value = article.get('Best_byte', False)
-                best_byte_display = "True" if best_byte_value else "False"
-                st.markdown(f"⭐ **best_byte:** {best_byte_display}")
-                logger.debug(f"Article {i+1} best_byte status: {best_byte_display}")
+                article_id = article.get('_id')
+                edit_best_byte_key = f"edit_best_byte_{article_id}"
+                save_confirm_best_byte_key = f"save_confirm_best_byte_{article_id}"
+                save_final_best_byte_key = f"save_final_best_byte_{article_id}"
                 
-                st.markdown(f"✍️ **Author:** {article.get('Author', 'Unknown')}")
-                st.markdown(f"🏷️ **Category:** {article.get('Category', '')} | {article.get('Subcategory', '')}")
-                st.markdown(f"📝 **UUID:** {article.get('uuid', '')}")
-                st.markdown(f"📄 **PDF:** {article.get('pdf_name', '')}")
+                if st.session_state.get(edit_best_byte_key, False):
+                    # Edit mode for best_byte
+                    logger.debug(f"Article {i+1} best_byte in edit mode")
+                    edited_best_byte = st.selectbox(
+                        "Edit Best Byte Status:",
+                        [True, False],
+                        index=0 if best_byte_value else 1,
+                        key=f"best_byte_edit_{article_id}",
+                        help="Select True or False for the best byte status"
+                    )
+                    
+                    # Save and Cancel buttons for best_byte
+                    best_byte_save_col, best_byte_cancel_col = st.columns(2)
+                    
+                    with best_byte_save_col:
+                        if st.button("💾 Save Status", key=f"save_best_byte_{article_id}", type="primary"):
+                            logger.info(f"Save best_byte button clicked for article {article_id}")
+                            st.session_state[save_confirm_best_byte_key] = True
+                    
+                    with best_byte_cancel_col:
+                        if st.button("❌ Cancel", key=f"cancel_best_byte_{article_id}"):
+                            logger.info(f"Cancel best_byte edit for article {article_id}")
+                            st.session_state[edit_best_byte_key] = False
+                            st.session_state[save_confirm_best_byte_key] = False
+                            st.session_state[save_final_best_byte_key] = False
+                            st.rerun()
+                    
+                    # First confirmation dialog for best_byte
+                    if st.session_state.get(save_confirm_best_byte_key, False):
+                        st.warning("⚠️ Are you sure you want to save changes to the best byte status?")
+                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                        
+                        with confirm_col1:
+                            if st.button("✅ Yes, Save", key=f"yes_save_best_byte_{article_id}", type="primary"):
+                                logger.info(f"First confirmation for best_byte save for article {article_id}")
+                                st.session_state[save_confirm_best_byte_key] = False
+                                st.session_state[save_final_best_byte_key] = True
+                                st.rerun()
+                        
+                        with confirm_col2:
+                            if st.button("❌ No, Cancel", key=f"no_save_best_byte_{article_id}"):
+                                logger.info(f"User cancelled best_byte save for article {article_id}")
+                                st.session_state[save_confirm_best_byte_key] = False
+                                st.rerun()
+                    
+                    # Second confirmation dialog for best_byte
+                    if st.session_state.get(save_final_best_byte_key, False):
+                        st.error("🚨 Final confirmation: This will permanently update the best byte status. Are you absolutely sure?")
+                        final_col1, final_col2, final_col3 = st.columns([1, 1, 1])
+                        
+                        with final_col1:
+                            if st.button("✅ YES, SAVE NOW", key=f"final_save_best_byte_{article_id}", type="primary"):
+                                logger.info(f"Final confirmation for best_byte save for article {article_id}")
+                                # Update MongoDB
+                                try:
+                                    collection.update_one(
+                                        {"_id": article_id},
+                                        {"$set": {"Best_byte": edited_best_byte}}
+                                    )
+                                    st.success("✅ Best byte status updated successfully!")
+                                    logger.info(f"Successfully updated best_byte for article {article_id} to {edited_best_byte}")
+                                    # Reset edit state
+                                    st.session_state[edit_best_byte_key] = False
+                                    st.session_state[save_final_best_byte_key] = False
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Failed to update best byte status: {str(e)}")
+                                    logger.error(f"Failed to update best_byte for article {article_id}: {str(e)}")
+                        
+                        with final_col2:
+                            if st.button("❌ Cancel", key=f"final_cancel_best_byte_{article_id}"):
+                                logger.info(f"User cancelled final best_byte save for article {article_id}")
+                                st.session_state[save_final_best_byte_key] = False
+                                st.rerun()
+                else:
+                    # View mode for best_byte
+                    best_byte_display = "True" if best_byte_value else "False"
+                    st.markdown(f"⭐ **best_byte:** {best_byte_display}")
+                    logger.debug(f"Article {i+1} best_byte status: {best_byte_display}")
+                    
+                    # Edit button for best_byte
+                    if st.button("✏️ Edit Status", key=f"edit_best_byte_btn_{article_id}"):
+                        logger.info(f"Edit best_byte button clicked for article {article_id}")
+                        st.session_state[edit_best_byte_key] = True
+                        st.rerun()
+                
+                # Create compact metadata layout using columns
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"✍️ **Author:** {article.get('Author', 'Unknown')}")
+                    st.markdown(f"🏷️ **Category:** {article.get('Category', '')} | {article.get('Subcategory', '')}")
+                    st.markdown(f"📝 **UUID:** {article.get('uuid', '')}")
+                
+                with col2:
+                    st.markdown(f"📄 **PDF:** {article.get('pdf_name', '')}")
+                    
+                    # Display byte_title_image
+                    byte_title_image = article.get('byte_title_image', '')
+                    if byte_title_image and byte_title_image.strip():
+                        st.markdown(f"🖼️ **Title Image:** [Click to view]({byte_title_image})")
+                        logger.debug(f"Article {i+1} byte_title_image: {byte_title_image}")
+                    else:
+                        st.markdown("🖼️ **Title Image:** Coming soon")
+                        logger.debug(f"Article {i+1} has no byte_title_image")
+                    
+                    # Display audio_link
+                    audio_link = article.get('audio_link', '')
+                    if audio_link and audio_link.strip():
+                        st.markdown(f"🎵 **Audio Link:** [Click to listen]({audio_link})")
+                        logger.debug(f"Article {i+1} audio_link: {audio_link}")
+                    else:
+                        st.markdown("🎵 **Audio Link:** Coming soon")
+                        logger.debug(f"Article {i+1} has no audio_link")
                 
                 # Show chunk information if available
                 if 'chunk_number' in article:
@@ -974,6 +1085,77 @@ if page == "📂 View Extracted Articles":
                         st.markdown(f"**Word Count:** {llm_review.get('actual_word_count', 'N/A')} words")
                         
                         st.markdown(f"**Recommendations:** {llm_review.get('recommendations', 'N/A')}")
+                
+                # Ready to Publish section
+                ready_to_publish_value = article.get('ready_to_publish_ananth', False)
+                article_id = article.get('_id')
+                publish_confirm_key = f"publish_confirm_{article_id}"
+                publish_final_key = f"publish_final_{article_id}"
+                
+                # Display current status
+                status_color = "🟢" if ready_to_publish_value else "🔴"
+                status_text = "Ready" if ready_to_publish_value else "Not Ready"
+                st.markdown(f"**📱 Current Status:** {status_color} {status_text}")
+                logger.debug(f"Article {i+1} ready_to_publish_ananth status: {ready_to_publish_value}")
+                
+                # Button text changes based on current status
+                button_text = "Mark Not Ready" if ready_to_publish_value else "Mark Ready to publish on the app"
+                button_type = "secondary" if ready_to_publish_value else "primary"
+                
+                if st.button(button_text, key=f"publish_toggle_{article_id}", type=button_type):
+                    logger.info(f"Publish toggle button clicked for article {article_id}")
+                    st.session_state[publish_confirm_key] = True
+                
+                # First confirmation dialog
+                if st.session_state.get(publish_confirm_key, False):
+                    action_text = "mark as NOT READY" if ready_to_publish_value else "mark as READY"
+                    st.warning(f"⚠️ Are you sure you want to {action_text} for publishing on the app?")
+                    confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                    
+                    with confirm_col1:
+                        if st.button("✅ Yes, Confirm", key=f"yes_publish_{article_id}", type="primary"):
+                            logger.info(f"First confirmation for publish toggle for article {article_id}")
+                            st.session_state[publish_confirm_key] = False
+                            st.session_state[publish_final_key] = True
+                            st.rerun()
+                    
+                    with confirm_col2:
+                        if st.button("❌ No, Cancel", key=f"no_publish_{article_id}"):
+                            logger.info(f"User cancelled publish toggle for article {article_id}")
+                            st.session_state[publish_confirm_key] = False
+                            st.rerun()
+                
+                # Second confirmation dialog
+                if st.session_state.get(publish_final_key, False):
+                    action_text = "mark as NOT READY" if ready_to_publish_value else "mark as READY"
+                    st.error(f"🚨 Final confirmation: This will permanently {action_text} for publishing. Are you absolutely sure?")
+                    final_col1, final_col2, final_col3 = st.columns([1, 1, 1])
+                    
+                    with final_col1:
+                        if st.button("✅ YES, CONFIRM", key=f"final_publish_{article_id}", type="primary"):
+                            logger.info(f"Final confirmation for publish toggle for article {article_id}")
+                            # Update MongoDB
+                            try:
+                                new_status = not ready_to_publish_value
+                                collection.update_one(
+                                    {"_id": article_id},
+                                    {"$set": {"ready_to_publish_ananth": new_status}}
+                                )
+                                status_text = "Ready" if new_status else "Not Ready"
+                                st.success(f"✅ Article status updated to {status_text}!")
+                                logger.info(f"Successfully updated ready_to_publish_ananth for article {article_id} to {new_status}")
+                                # Reset confirmation state
+                                st.session_state[publish_final_key] = False
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to update publish status: {str(e)}")
+                                logger.error(f"Failed to update ready_to_publish_ananth for article {article_id}: {str(e)}")
+                    
+                    with final_col2:
+                        if st.button("❌ Cancel", key=f"final_cancel_publish_{article_id}"):
+                            logger.info(f"User cancelled final publish toggle for article {article_id}")
+                            st.session_state[publish_final_key] = False
+                            st.rerun()
     else:
         logger.warning("No articles found matching the current filters")
         st.warning("No articles found in the database.")
