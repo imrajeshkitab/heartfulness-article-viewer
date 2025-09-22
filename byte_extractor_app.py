@@ -87,6 +87,14 @@ if page == "📂 View Extracted Articles":
         )
         logger.info(f"Original article status filter selected: {original_article_status_filter}")
     
+    with col3:
+        best_byte_filter = st.selectbox(
+            "⭐ Best Byte:",
+            ["All", "✅ Yes", "❌ No"],
+            help="Filter articles by their best byte status"
+        )
+        logger.info(f"Best byte filter selected: {best_byte_filter}")
+    
     # First dropdown: Year
     logger.info("Fetching available years from database")
     available_years = sorted(collection.distinct("Year"), reverse=True)
@@ -302,6 +310,17 @@ if page == "📂 View Extracted Articles":
             original_article_status_conditions = [{"orgnl_artcl_rv_sts": "rejected"}]
             logger.debug("Original article rejected status condition: exact match 'rejected'")
     
+    # Apply best byte filter
+    best_byte_conditions = []
+    if best_byte_filter != "All":
+        logger.info(f"Applying best byte filter: {best_byte_filter}")
+        if best_byte_filter == "✅ Yes":
+            best_byte_conditions = [{"Best_byte": True}]
+            logger.debug("Best byte condition: True")
+        elif best_byte_filter == "❌ No":
+            best_byte_conditions = [{"Best_byte": False}]
+            logger.debug("Best byte condition: False")
+    
     # Apply summary filter (independent of year selection)
     if selected_summary != "All":
         logger.info(f"Applying summary filter: {selected_summary}")
@@ -351,6 +370,14 @@ if page == "📂 View Extracted Articles":
         else:
             and_conditions.append({"$or": summary_conditions})
             logger.debug(f"Added $or summary conditions: {len(summary_conditions)} conditions")
+    
+    if best_byte_conditions:
+        if len(best_byte_conditions) == 1:
+            and_conditions.append(best_byte_conditions[0])
+            logger.debug("Added single best byte condition")
+        else:
+            and_conditions.append({"$or": best_byte_conditions})
+            logger.debug(f"Added $or best byte conditions: {len(best_byte_conditions)} conditions")
     
     # Apply year filter
     if selected_year != "All Years":
@@ -409,6 +436,9 @@ if page == "📂 View Extracted Articles":
                     "rejected": "🔴 Rejected"
                 }.get(final_query["orgnl_artcl_rv_sts"], final_query["orgnl_artcl_rv_sts"])
                 filter_info.append(f"📄 Article Status: {original_status_display}")
+            if "Best_byte" in final_query:
+                best_byte_display = "✅ Yes" if final_query["Best_byte"] else "❌ No"
+                filter_info.append(f"⭐ Best Byte: {best_byte_display}")
             if "Year" in final_query:
                 filter_info.append(f"📅 Year: {final_query['Year']}")
             if "content_summary" in final_query:
@@ -443,6 +473,108 @@ if page == "📂 View Extracted Articles":
             with st.container():
                 st.markdown("---")
                 st.subheader(f"📖 {article.get('Title', 'Untitled')}")
+                
+                # Current Title section with edit functionality
+                article_id = article.get('_id')
+                current_title = article.get('current_title', '')
+                edit_title_key = f"edit_title_{article_id}"
+                save_confirm_title_key = f"save_confirm_title_{article_id}"
+                save_final_title_key = f"save_final_title_{article_id}"
+                
+                if st.session_state.get(edit_title_key, False):
+                    # Edit mode for current title
+                    logger.debug(f"Article {i+1} current title in edit mode")
+                    edited_title = st.text_input(
+                        "Edit Current Title:",
+                        value=current_title,
+                        key=f"title_edit_{article_id}",
+                        help="Edit the current title. This will be displayed as the modified version of the original title."
+                    )
+                    
+                    # Save and Cancel buttons for title
+                    title_save_col, title_cancel_col = st.columns(2)
+                    
+                    with title_save_col:
+                        if st.button("💾 Save Title", key=f"save_title_{article_id}", type="primary"):
+                            logger.info(f"Save title button clicked for article {article_id}")
+                            st.session_state[save_confirm_title_key] = True
+                    
+                    with title_cancel_col:
+                        if st.button("❌ Cancel", key=f"cancel_title_{article_id}"):
+                            logger.info(f"Cancel title edit for article {article_id}")
+                            st.session_state[edit_title_key] = False
+                            st.session_state[save_confirm_title_key] = False
+                            st.session_state[save_final_title_key] = False
+                            st.rerun()
+                    
+                    # First confirmation dialog for title
+                    if st.session_state.get(save_confirm_title_key, False):
+                        st.warning("⚠️ Are you sure you want to save changes to the current title?")
+                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                        
+                        with confirm_col1:
+                            if st.button("✅ Yes, Save", key=f"yes_save_title_{article_id}", type="primary"):
+                                logger.info(f"First confirmation for title save for article {article_id}")
+                                st.session_state[save_confirm_title_key] = False
+                                st.session_state[save_final_title_key] = True
+                                st.rerun()
+                        
+                        with confirm_col2:
+                            if st.button("❌ No, Cancel", key=f"no_save_title_{article_id}"):
+                                logger.info(f"User cancelled title save for article {article_id}")
+                                st.session_state[save_confirm_title_key] = False
+                                st.rerun()
+                    
+                    # Second confirmation dialog for title
+                    if st.session_state.get(save_final_title_key, False):
+                        st.error("🚨 Final confirmation: This will permanently update the current title. Are you absolutely sure?")
+                        final_col1, final_col2, final_col3 = st.columns([1, 1, 1])
+                        
+                        with final_col1:
+                            if st.button("✅ YES, SAVE NOW", key=f"final_save_title_{article_id}", type="primary"):
+                                logger.info(f"Final confirmation for title save for article {article_id}")
+                                # Update MongoDB
+                                try:
+                                    collection.update_one(
+                                        {"_id": article_id},
+                                        {"$set": {"current_title": edited_title}}
+                                    )
+                                    st.success("✅ Current title updated successfully!")
+                                    logger.info(f"Successfully updated current title for article {article_id}")
+                                    # Reset edit state
+                                    st.session_state[edit_title_key] = False
+                                    st.session_state[save_final_title_key] = False
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Failed to update title: {str(e)}")
+                                    logger.error(f"Failed to update title for article {article_id}: {str(e)}")
+                        
+                        with final_col2:
+                            if st.button("❌ Cancel", key=f"final_cancel_title_{article_id}"):
+                                logger.info(f"User cancelled final title save for article {article_id}")
+                                st.session_state[save_final_title_key] = False
+                                st.rerun()
+                else:
+                    # View mode for current title
+                    if current_title and current_title.strip():
+                        st.markdown(f"📝 **Current Title:** {current_title}")
+                        logger.debug(f"Article {i+1} current title displayed: {current_title}")
+                    else:
+                        st.markdown("📝 **Current Title:** *[Blank - No modified version yet]*")
+                        logger.debug(f"Article {i+1} has no current title")
+                    
+                    # Edit button for title
+                    if st.button("✏️ Edit Title", key=f"edit_title_btn_{article_id}"):
+                        logger.info(f"Edit title button clicked for article {article_id}")
+                        st.session_state[edit_title_key] = True
+                        st.rerun()
+                
+                # Display Best Byte status
+                best_byte_value = article.get('Best_byte', False)
+                best_byte_display = "True" if best_byte_value else "False"
+                st.markdown(f"⭐ **best_byte:** {best_byte_display}")
+                logger.debug(f"Article {i+1} best_byte status: {best_byte_display}")
+                
                 st.markdown(f"✍️ **Author:** {article.get('Author', 'Unknown')}")
                 st.markdown(f"🏷️ **Category:** {article.get('Category', '')} | {article.get('Subcategory', '')}")
                 st.markdown(f"📝 **UUID:** {article.get('uuid', '')}")
@@ -460,162 +592,367 @@ if page == "📂 View Extracted Articles":
                         st.markdown(f"🎯 **Confidence:** {article['fragment_confidence']:.2f}")
                     logger.debug(f"Article {i+1} is a fragment with confidence: {article.get('fragment_confidence', 'N/A')}")
                 
-                # Show Content Summary if available
-                if article.get('content_summary'):
-                    logger.debug(f"Article {i+1} has content summary, displaying review interface")
-                    with st.expander("Content Summary", expanded=True):
-                        st.markdown(article.get('content_summary', ''))
+                # Create 2x2 grid layout for expanders
+                col1, col2 = st.columns(2)
+                
+                # Left column - Original versions
+                with col1:
+                    # Show Content Summary if available
+                    if article.get('content_summary'):
+                        logger.debug(f"Article {i+1} has content summary, displaying review interface")
+                        with st.expander("Content Summary", expanded=False):
+                            st.markdown(article.get('content_summary', ''))
+                            
+                            # Show current review status
+                            current_status = article.get('summary_review_status', 'pending')
+                            status_color = {
+                                'accepted': '🟢',
+                                'rejected': '🔴', 
+                                'pending': '🟡'
+                            }.get(current_status, '🟡')
+                            
+                            st.markdown(f"**Current Status:** {status_color} {current_status.title()}")
+                            logger.debug(f"Article {i+1} current status: {current_status}")
+                            
+                            # Accept/Reject buttons
+                            btn_col1, btn_col2 = st.columns(2)
+                            
+                            with btn_col1:
+                                if st.button("✅ Accept", key=f"accept_{article.get('_id')}", type="primary"):
+                                    logger.info(f"Accept button clicked for article {article.get('_id')}")
+                                    st.session_state[f"show_accept_confirm_{article.get('_id')}"] = True
+                            
+                            with btn_col2:
+                                if st.button("❌ Reject", key=f"reject_{article.get('_id')}", type="secondary"):
+                                    logger.info(f"Reject button clicked for article {article.get('_id')}")
+                                    st.session_state[f"show_reject_confirm_{article.get('_id')}"] = True
+                            
+                            # Accept confirmation dialog
+                            if st.session_state.get(f"show_accept_confirm_{article.get('_id')}", False):
+                                logger.info(f"Showing accept confirmation dialog for article {article.get('_id')}")
+                                st.warning("⚠️ Are you sure you want to accept this summary?")
+                                confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                                
+                                with confirm_col1:
+                                    if st.button("✅ Yes, Accept", key=f"yes_accept_{article.get('_id')}", type="primary"):
+                                        logger.info(f"User confirmed acceptance for article {article.get('_id')}")
+                                        success = update_summary_review_status(str(article.get('_id')), "accepted")
+                                        if success:
+                                            st.success("✅ Summary accepted successfully!")
+                                            logger.info(f"Successfully accepted article {article.get('_id')}")
+                                            st.session_state[f"show_accept_confirm_{article.get('_id')}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ Failed to update status. Please try again.")
+                                            logger.error(f"Failed to accept article {article.get('_id')}")
+                                
+                                with confirm_col2:
+                                    if st.button("❌ No, Cancel", key=f"no_accept_{article.get('_id')}"):
+                                        logger.info(f"User cancelled acceptance for article {article.get('_id')}")
+                                        st.session_state[f"show_accept_confirm_{article.get('_id')}"] = False
+                                        st.rerun()
+                            
+                            # Reject confirmation dialog
+                            if st.session_state.get(f"show_reject_confirm_{article.get('_id')}", False):
+                                logger.info(f"Showing reject confirmation dialog for article {article.get('_id')}")
+                                st.warning("⚠️ Are you sure you want to reject this summary?")
+                                confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                                
+                                with confirm_col1:
+                                    if st.button("✅ Yes, Reject", key=f"yes_reject_{article.get('_id')}", type="primary"):
+                                        logger.info(f"User confirmed rejection for article {article.get('_id')}")
+                                        success = update_summary_review_status(str(article.get('_id')), "rejected")
+                                        if success:
+                                            st.success("❌ Summary rejected successfully!")
+                                            logger.info(f"Successfully rejected article {article.get('_id')}")
+                                            st.session_state[f"show_reject_confirm_{article.get('_id')}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ Failed to update status. Please try again.")
+                                            logger.error(f"Failed to reject article {article.get('_id')}")
+                                
+                                with confirm_col2:
+                                    if st.button("❌ No, Cancel", key=f"no_reject_{article.get('_id')}"):
+                                        logger.info(f"User cancelled rejection for article {article.get('_id')}")
+                                        st.session_state[f"show_reject_confirm_{article.get('_id')}"] = False
+                                        st.rerun()
+                    
+                    with st.expander("Original Content"):
+                        st.write(article.get("Content", ""))
+                        logger.debug(f"Article {i+1} content displayed")
                         
-                        # Show current review status
-                        current_status = article.get('summary_review_status', 'pending')
+                        # Show current original article review status
+                        current_article_status = article.get('orgnl_artcl_rv_sts', 'pending')
                         status_color = {
                             'accepted': '🟢',
                             'rejected': '🔴', 
                             'pending': '🟡'
-                        }.get(current_status, '🟡')
+                        }.get(current_article_status, '🟡')
                         
-                        st.markdown(f"**Current Status:** {status_color} {current_status.title()}")
-                        logger.debug(f"Article {i+1} current status: {current_status}")
+                        st.markdown(f"**Original Article Review Status:** {status_color} {current_article_status.title()}")
+                        logger.debug(f"Article {i+1} original article review status: {current_article_status}")
                         
-                        # Accept/Reject buttons
-                        col1, col2 = st.columns(2)
+                        # Accept/Reject buttons for original article
+                        btn_col1, btn_col2 = st.columns(2)
                         
-                        with col1:
-                            if st.button("✅ Accept", key=f"accept_{article.get('_id')}", type="primary"):
-                                logger.info(f"Accept button clicked for article {article.get('_id')}")
-                                st.session_state[f"show_accept_confirm_{article.get('_id')}"] = True
+                        with btn_col1:
+                            if st.button("✅ Accept Article", key=f"accept_article_{article.get('_id')}", type="primary"):
+                                logger.info(f"Accept article button clicked for article {article.get('_id')}")
+                                st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = True
                         
-                        with col2:
-                            if st.button("❌ Reject", key=f"reject_{article.get('_id')}", type="secondary"):
-                                logger.info(f"Reject button clicked for article {article.get('_id')}")
-                                st.session_state[f"show_reject_confirm_{article.get('_id')}"] = True
+                        with btn_col2:
+                            if st.button("❌ Reject Article", key=f"reject_article_{article.get('_id')}", type="secondary"):
+                                logger.info(f"Reject article button clicked for article {article.get('_id')}")
+                                st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = True
                         
-                        # Accept confirmation dialog
-                        if st.session_state.get(f"show_accept_confirm_{article.get('_id')}", False):
-                            logger.info(f"Showing accept confirmation dialog for article {article.get('_id')}")
-                            st.warning("⚠️ Are you sure you want to accept this summary?")
+                        # Accept article confirmation dialog
+                        if st.session_state.get(f"show_accept_article_confirm_{article.get('_id')}", False):
+                            logger.info(f"Showing accept article confirmation dialog for article {article.get('_id')}")
+                            st.warning("⚠️ Are you sure you want to accept this original article?")
                             confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
                             
                             with confirm_col1:
-                                if st.button("✅ Yes, Accept", key=f"yes_accept_{article.get('_id')}", type="primary"):
-                                    logger.info(f"User confirmed acceptance for article {article.get('_id')}")
-                                    success = update_summary_review_status(str(article.get('_id')), "accepted")
+                                if st.button("✅ Yes, Accept", key=f"yes_accept_article_{article.get('_id')}", type="primary"):
+                                    logger.info(f"User confirmed article acceptance for article {article.get('_id')}")
+                                    success = update_original_article_review_status(str(article.get('_id')), "accepted")
                                     if success:
-                                        st.success("✅ Summary accepted successfully!")
-                                        logger.info(f"Successfully accepted article {article.get('_id')}")
-                                        st.session_state[f"show_accept_confirm_{article.get('_id')}"] = False
+                                        st.success("✅ Original article accepted successfully!")
+                                        logger.info(f"Successfully accepted original article {article.get('_id')}")
+                                        st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = False
                                         st.rerun()
                                     else:
-                                        st.error("❌ Failed to update status. Please try again.")
-                                        logger.error(f"Failed to accept article {article.get('_id')}")
+                                        st.error("❌ Failed to update article status. Please try again.")
+                                        logger.error(f"Failed to accept original article {article.get('_id')}")
                             
                             with confirm_col2:
-                                if st.button("❌ No, Cancel", key=f"no_accept_{article.get('_id')}"):
-                                    logger.info(f"User cancelled acceptance for article {article.get('_id')}")
-                                    st.session_state[f"show_accept_confirm_{article.get('_id')}"] = False
-                                    st.rerun()
-                        
-                        # Reject confirmation dialog
-                        if st.session_state.get(f"show_reject_confirm_{article.get('_id')}", False):
-                            logger.info(f"Showing reject confirmation dialog for article {article.get('_id')}")
-                            st.warning("⚠️ Are you sure you want to reject this summary?")
-                            confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
-                            
-                            with confirm_col1:
-                                if st.button("✅ Yes, Reject", key=f"yes_reject_{article.get('_id')}", type="primary"):
-                                    logger.info(f"User confirmed rejection for article {article.get('_id')}")
-                                    success = update_summary_review_status(str(article.get('_id')), "rejected")
-                                    if success:
-                                        st.success("❌ Summary rejected successfully!")
-                                        logger.info(f"Successfully rejected article {article.get('_id')}")
-                                        st.session_state[f"show_reject_confirm_{article.get('_id')}"] = False
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ Failed to update status. Please try again.")
-                                        logger.error(f"Failed to reject article {article.get('_id')}")
-                            
-                            with confirm_col2:
-                                if st.button("❌ No, Cancel", key=f"no_reject_{article.get('_id')}"):
-                                    logger.info(f"User cancelled rejection for article {article.get('_id')}")
-                                    st.session_state[f"show_reject_confirm_{article.get('_id')}"] = False
-                                    st.rerun()
-                
-                with st.expander("Read Content"):
-                    st.write(article.get("Content", ""))
-                    logger.debug(f"Article {i+1} content displayed")
-                    
-                    # Show current original article review status
-                    current_article_status = article.get('orgnl_artcl_rv_sts', 'pending')
-                    status_color = {
-                        'accepted': '🟢',
-                        'rejected': '🔴', 
-                        'pending': '🟡'
-                    }.get(current_article_status, '🟡')
-                    
-                    st.markdown(f"**Original Article Review Status:** {status_color} {current_article_status.title()}")
-                    logger.debug(f"Article {i+1} original article review status: {current_article_status}")
-                    
-                    # Accept/Reject buttons for original article
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button("✅ Accept Article", key=f"accept_article_{article.get('_id')}", type="primary"):
-                            logger.info(f"Accept article button clicked for article {article.get('_id')}")
-                            st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = True
-                    
-                    with col2:
-                        if st.button("❌ Reject Article", key=f"reject_article_{article.get('_id')}", type="secondary"):
-                            logger.info(f"Reject article button clicked for article {article.get('_id')}")
-                            st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = True
-                    
-                    # Accept article confirmation dialog
-                    if st.session_state.get(f"show_accept_article_confirm_{article.get('_id')}", False):
-                        logger.info(f"Showing accept article confirmation dialog for article {article.get('_id')}")
-                        st.warning("⚠️ Are you sure you want to accept this original article?")
-                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
-                        
-                        with confirm_col1:
-                            if st.button("✅ Yes, Accept", key=f"yes_accept_article_{article.get('_id')}", type="primary"):
-                                logger.info(f"User confirmed article acceptance for article {article.get('_id')}")
-                                success = update_original_article_review_status(str(article.get('_id')), "accepted")
-                                if success:
-                                    st.success("✅ Original article accepted successfully!")
-                                    logger.info(f"Successfully accepted original article {article.get('_id')}")
+                                if st.button("❌ No, Cancel", key=f"no_accept_article_{article.get('_id')}"):
+                                    logger.info(f"User cancelled article acceptance for article {article.get('_id')}")
                                     st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = False
                                     st.rerun()
-                                else:
-                                    st.error("❌ Failed to update article status. Please try again.")
-                                    logger.error(f"Failed to accept original article {article.get('_id')}")
                         
-                        with confirm_col2:
-                            if st.button("❌ No, Cancel", key=f"no_accept_article_{article.get('_id')}"):
-                                logger.info(f"User cancelled article acceptance for article {article.get('_id')}")
-                                st.session_state[f"show_accept_article_confirm_{article.get('_id')}"] = False
-                                st.rerun()
-                    
-                    # Reject article confirmation dialog
-                    if st.session_state.get(f"show_reject_article_confirm_{article.get('_id')}", False):
-                        logger.info(f"Showing reject article confirmation dialog for article {article.get('_id')}")
-                        st.warning("⚠️ Are you sure you want to reject this original article?")
-                        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
-                        
-                        with confirm_col1:
-                            if st.button("✅ Yes, Reject", key=f"yes_reject_article_{article.get('_id')}", type="primary"):
-                                logger.info(f"User confirmed article rejection for article {article.get('_id')}")
-                                success = update_original_article_review_status(str(article.get('_id')), "rejected")
-                                if success:
-                                    st.success("❌ Original article rejected successfully!")
-                                    logger.info(f"Successfully rejected original article {article.get('_id')}")
+                        # Reject article confirmation dialog
+                        if st.session_state.get(f"show_reject_article_confirm_{article.get('_id')}", False):
+                            logger.info(f"Showing reject article confirmation dialog for article {article.get('_id')}")
+                            st.warning("⚠️ Are you sure you want to reject this original article?")
+                            confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                            
+                            with confirm_col1:
+                                if st.button("✅ Yes, Reject", key=f"yes_reject_article_{article.get('_id')}", type="primary"):
+                                    logger.info(f"User confirmed article rejection for article {article.get('_id')}")
+                                    success = update_original_article_review_status(str(article.get('_id')), "rejected")
+                                    if success:
+                                        st.success("❌ Original article rejected successfully!")
+                                        logger.info(f"Successfully rejected original article {article.get('_id')}")
+                                        st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = False
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Failed to update article status. Please try again.")
+                                        logger.error(f"Failed to reject original article {article.get('_id')}")
+                            
+                            with confirm_col2:
+                                if st.button("❌ No, Cancel", key=f"no_reject_article_{article.get('_id')}"):
+                                    logger.info(f"User cancelled article rejection for article {article.get('_id')}")
                                     st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = False
                                     st.rerun()
-                                else:
-                                    st.error("❌ Failed to update article status. Please try again.")
-                                    logger.error(f"Failed to reject original article {article.get('_id')}")
+                
+                # Right column - Current/Modified versions
+                with col2:
+                    # Current Content Summary expander
+                    with st.expander("Current Content Summary", expanded=False):
+                        current_summary = article.get('current_summary', '')
+                        article_id = article.get('_id')
                         
-                        with confirm_col2:
-                            if st.button("❌ No, Cancel", key=f"no_reject_article_{article.get('_id')}"):
-                                logger.info(f"User cancelled article rejection for article {article.get('_id')}")
-                                st.session_state[f"show_reject_article_confirm_{article.get('_id')}"] = False
+                        # Check if we're in edit mode for this article's summary
+                        edit_key = f"edit_summary_{article_id}"
+                        save_confirm_key = f"save_confirm_summary_{article_id}"
+                        save_final_key = f"save_final_summary_{article_id}"
+                        
+                        if st.session_state.get(edit_key, False):
+                            # Edit mode - show text area with markdown formatting visible
+                            logger.debug(f"Article {i+1} summary in edit mode")
+                            edited_summary = st.text_area(
+                                "Edit Content Summary (Markdown formatting visible):",
+                                value=current_summary,
+                                height=200,
+                                key=f"summary_edit_{article_id}",
+                                help="Edit the content summary. Markdown formatting like ##, **, etc. will be visible as text."
+                            )
+                            
+                            # Save and Cancel buttons
+                            save_col, cancel_col = st.columns(2)
+                            
+                            with save_col:
+                                if st.button("💾 Save Changes", key=f"save_summary_{article_id}", type="primary"):
+                                    logger.info(f"Save summary button clicked for article {article_id}")
+                                    st.session_state[save_confirm_key] = True
+                            
+                            with cancel_col:
+                                if st.button("❌ Cancel", key=f"cancel_summary_{article_id}"):
+                                    logger.info(f"Cancel summary edit for article {article_id}")
+                                    st.session_state[edit_key] = False
+                                    st.session_state[save_confirm_key] = False
+                                    st.session_state[save_final_key] = False
+                                    st.rerun()
+                            
+                            # First confirmation dialog
+                            if st.session_state.get(save_confirm_key, False):
+                                st.warning("⚠️ Are you sure you want to save changes to the content summary?")
+                                confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                                
+                                with confirm_col1:
+                                    if st.button("✅ Yes, Save", key=f"yes_save_summary_{article_id}", type="primary"):
+                                        logger.info(f"First confirmation for summary save for article {article_id}")
+                                        st.session_state[save_confirm_key] = False
+                                        st.session_state[save_final_key] = True
+                                        st.rerun()
+                                
+                                with confirm_col2:
+                                    if st.button("❌ No, Cancel", key=f"no_save_summary_{article_id}"):
+                                        logger.info(f"User cancelled summary save for article {article_id}")
+                                        st.session_state[save_confirm_key] = False
+                                        st.rerun()
+                            
+                            # Second confirmation dialog
+                            if st.session_state.get(save_final_key, False):
+                                st.error("🚨 Final confirmation: This will permanently update the content summary. Are you absolutely sure?")
+                                final_col1, final_col2, final_col3 = st.columns([1, 1, 1])
+                                
+                                with final_col1:
+                                    if st.button("✅ YES, SAVE NOW", key=f"final_save_summary_{article_id}", type="primary"):
+                                        logger.info(f"Final confirmation for summary save for article {article_id}")
+                                        # Update MongoDB
+                                        try:
+                                            collection.update_one(
+                                                {"_id": article_id},
+                                                {"$set": {"current_summary": edited_summary}}
+                                            )
+                                            st.success("✅ Content summary updated successfully!")
+                                            logger.info(f"Successfully updated summary for article {article_id}")
+                                            # Reset edit state
+                                            st.session_state[edit_key] = False
+                                            st.session_state[save_final_key] = False
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ Failed to update summary: {str(e)}")
+                                            logger.error(f"Failed to update summary for article {article_id}: {str(e)}")
+                                
+                                with final_col2:
+                                    if st.button("❌ Cancel", key=f"final_cancel_summary_{article_id}"):
+                                        logger.info(f"User cancelled final summary save for article {article_id}")
+                                        st.session_state[save_final_key] = False
+                                        st.rerun()
+                        else:
+                            # View mode
+                            if current_summary and current_summary.strip():
+                                st.markdown(current_summary)
+                                logger.debug(f"Article {i+1} current summary displayed")
+                            else:
+                                st.info("No modified version yet")
+                                logger.debug(f"Article {i+1} has no current summary")
+                            
+                            # Edit button
+                            if st.button("✏️ Edit", key=f"edit_summary_btn_{article_id}"):
+                                logger.info(f"Edit summary button clicked for article {article_id}")
+                                st.session_state[edit_key] = True
+                                st.rerun()
+                    
+                    # Current Original Article expander
+                    with st.expander("Current Original Article", expanded=False):
+                        current_original_article = article.get('current_origina_article', '')
+                        article_id = article.get('_id')
+                        
+                        # Check if we're in edit mode for this article's original content
+                        edit_key = f"edit_article_{article_id}"
+                        save_confirm_key = f"save_confirm_article_{article_id}"
+                        save_final_key = f"save_final_article_{article_id}"
+                        
+                        if st.session_state.get(edit_key, False):
+                            # Edit mode - show text area with markdown formatting visible
+                            logger.debug(f"Article {i+1} original article in edit mode")
+                            edited_article = st.text_area(
+                                "Edit Original Article (Markdown formatting visible):",
+                                value=current_original_article,
+                                height=300,
+                                key=f"article_edit_{article_id}",
+                                help="Edit the original article content. Markdown formatting like ##, **, etc. will be visible as text."
+                            )
+                            
+                            # Save and Cancel buttons
+                            save_col, cancel_col = st.columns(2)
+                            
+                            with save_col:
+                                if st.button("💾 Save Changes", key=f"save_article_{article_id}", type="primary"):
+                                    logger.info(f"Save article button clicked for article {article_id}")
+                                    st.session_state[save_confirm_key] = True
+                            
+                            with cancel_col:
+                                if st.button("❌ Cancel", key=f"cancel_article_{article_id}"):
+                                    logger.info(f"Cancel article edit for article {article_id}")
+                                    st.session_state[edit_key] = False
+                                    st.session_state[save_confirm_key] = False
+                                    st.session_state[save_final_key] = False
+                                    st.rerun()
+                            
+                            # First confirmation dialog
+                            if st.session_state.get(save_confirm_key, False):
+                                st.warning("⚠️ Are you sure you want to save changes to the original article?")
+                                confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                                
+                                with confirm_col1:
+                                    if st.button("✅ Yes, Save", key=f"yes_save_article_{article_id}", type="primary"):
+                                        logger.info(f"First confirmation for article save for article {article_id}")
+                                        st.session_state[save_confirm_key] = False
+                                        st.session_state[save_final_key] = True
+                                        st.rerun()
+                                
+                                with confirm_col2:
+                                    if st.button("❌ No, Cancel", key=f"no_save_article_{article_id}"):
+                                        logger.info(f"User cancelled article save for article {article_id}")
+                                        st.session_state[save_confirm_key] = False
+                                        st.rerun()
+                            
+                            # Second confirmation dialog
+                            if st.session_state.get(save_final_key, False):
+                                st.error("🚨 Final confirmation: This will permanently update the original article. Are you absolutely sure?")
+                                final_col1, final_col2, final_col3 = st.columns([1, 1, 1])
+                                
+                                with final_col1:
+                                    if st.button("✅ YES, SAVE NOW", key=f"final_save_article_{article_id}", type="primary"):
+                                        logger.info(f"Final confirmation for article save for article {article_id}")
+                                        # Update MongoDB
+                                        try:
+                                            collection.update_one(
+                                                {"_id": article_id},
+                                                {"$set": {"current_origina_article": edited_article}}
+                                            )
+                                            st.success("✅ Original article updated successfully!")
+                                            logger.info(f"Successfully updated original article for article {article_id}")
+                                            # Reset edit state
+                                            st.session_state[edit_key] = False
+                                            st.session_state[save_final_key] = False
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ Failed to update article: {str(e)}")
+                                            logger.error(f"Failed to update article for article {article_id}: {str(e)}")
+                                
+                                with final_col2:
+                                    if st.button("❌ Cancel", key=f"final_cancel_article_{article_id}"):
+                                        logger.info(f"User cancelled final article save for article {article_id}")
+                                        st.session_state[save_final_key] = False
+                                        st.rerun()
+                        else:
+                            # View mode
+                            if current_original_article and current_original_article.strip():
+                                st.write(current_original_article)
+                                logger.debug(f"Article {i+1} current original article displayed")
+                            else:
+                                st.info("No modified version yet")
+                                logger.debug(f"Article {i+1} has no current original article")
+                            
+                            # Edit button
+                            if st.button("✏️ Edit", key=f"edit_article_btn_{article_id}"):
+                                logger.info(f"Edit article button clicked for article {article_id}")
+                                st.session_state[edit_key] = True
                                 st.rerun()
                 
                 # Show LLM Review if article has been reviewed
