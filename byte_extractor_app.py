@@ -69,7 +69,7 @@ if page == "📂 View Extracted Articles":
         st.warning("No author data found in the database")
         logger.warning("No author data found in the database")
     
-    # Second row: Other filters
+    # Compact filter layout - Row 1: Status filters
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         summary_status_filter = st.selectbox(
@@ -95,136 +95,154 @@ if page == "📂 View Extracted Articles":
         )
         logger.info(f"Best byte filter selected: {best_byte_filter}")
     
-    # First dropdown: Year
-    logger.info("Fetching available years from database")
-    available_years = sorted(collection.distinct("Year"), reverse=True)
-    logger.info(f"Found {len(available_years)} years: {available_years}")
-    
-    if available_years:
-        selected_year = st.selectbox("📅 Select Year:", ["All Years"] + available_years)
-        logger.info(f"Year selected: {selected_year}")
-    else:
-        selected_year = "All Years"
-        st.warning("No year data found in the database")
-        logger.warning("No year data found in the database")
-    
-    # Second dropdown: Have Summary (independent of year selection)
-    logger.info("Processing summary filter across all years")
-    
-    # Build base query for summary counting (excluding year filter)
-    base_query = {}
-    if selected_authors:
-        base_query["Author"] = {"$in": selected_authors}
-    
-    # Count documents with and without content_summary across all years
-    logger.debug(f"Base query for summary counting: {base_query}")
-    all_docs = list(collection.find(base_query, {"content_summary": 1}))
-    logger.info(f"Found {len(all_docs)} documents for summary counting")
-    
-    # Count documents with and without content_summary
-    has_summary_count = sum(1 for doc in all_docs if doc.get('content_summary'))
-    no_summary_count = len(all_docs) - has_summary_count
-    logger.info(f"Summary counts - Has summary: {has_summary_count}, No summary: {no_summary_count}")
-    
-    summary_options = []
-    if has_summary_count > 0:
-        summary_options.append(f"✅ Yes ({has_summary_count} articles)")
-    if no_summary_count > 0:
-        summary_options.append(f"❌ No ({no_summary_count} articles)")
-    
-    if summary_options:
-        selected_summary = st.selectbox("📝 Have Summary:", ["All"] + summary_options)
-        logger.info(f"Summary filter selected: {selected_summary}")
-    else:
-        selected_summary = "All"
-        st.warning("No articles found in the database")
-        logger.warning("No articles found in the database")
-    
-    # Third dropdown: Available Editions (based on ALL selected filters)
-    # Check if any filters are applied
-    any_filters_applied = (
-        selected_authors or 
-        summary_status_filter != "All" or 
-        original_article_status_filter != "All" or
-        selected_year != "All Years" or 
-        selected_summary != "All"
-    )
-    
-    if any_filters_applied:
-        logger.info(f"Processing PDF selection with filters - Authors: {selected_authors}, Summary Status: {summary_status_filter}, Original Article Status: {original_article_status_filter}, Year: {selected_year}, Summary: {selected_summary}")
+    with col4:
+        # Year filter
+        logger.info("Fetching available years from database")
+        available_years = sorted(collection.distinct("Year"), reverse=True)
+        logger.info(f"Found {len(available_years)} years: {available_years}")
         
-        # Build comprehensive query based on ALL selections
-        query = {}
-        
-        # Add author filter if selected
-        if selected_authors:
-            query["Author"] = {"$in": selected_authors}
-        
-        # Add year filter if selected
-        if selected_year != "All Years":
-            query["Year"] = selected_year
-        
-        # Add summary filter if selected
-        if selected_summary != "All":
-            want_summary = selected_summary.startswith("✅")
-            logger.info(f"Want summary: {want_summary}")
-            if want_summary:
-                query["content_summary"] = {"$exists": True, "$ne": ""}
-            else:
-                query["$or"] = [
-                    {"content_summary": {"$exists": False}},
-                    {"content_summary": ""},
-                    {"content_summary": None}
-                ]
-        
-        # Add summary review status filter if selected
-        if summary_status_filter != "All":
-            if summary_status_filter == "🟡 Pending":
-                query["$or"] = [
-                    {"summary_review_status": {"$exists": False}},
-                    {"summary_review_status": None},
-                    {"summary_review_status": ""},
-                    {"summary_review_status": "pending"}
-                ]
-            elif summary_status_filter == "🟢 Accepted":
-                query["summary_review_status"] = "accepted"
-            elif summary_status_filter == "🔴 Rejected":
-                query["summary_review_status"] = "rejected"
-        
-        # Add original article review status filter if selected
-        if original_article_status_filter != "All":
-            if original_article_status_filter == "🟡 Pending":
-                query["$or"] = [
-                    {"orgnl_artcl_rv_sts": {"$exists": False}},
-                    {"orgnl_artcl_rv_sts": None},
-                    {"orgnl_artcl_rv_sts": ""},
-                    {"orgnl_artcl_rv_sts": "pending"}
-                ]
-            elif original_article_status_filter == "🟢 Accepted":
-                query["orgnl_artcl_rv_sts"] = "accepted"
-            elif original_article_status_filter == "🔴 Rejected":
-                query["orgnl_artcl_rv_sts"] = "rejected"
-        
-        logger.debug(f"PDF selection query: {query}")
-        
-        # Get unique pdf_names for the filtered documents
-        available_editions = sorted(collection.distinct("pdf_name", query))
-        logger.info(f"Found {len(available_editions)} editions: {available_editions}")
-        
-        if available_editions:
-            selected_pdf = st.selectbox("📚 Select Available Editions:", ["All"] + available_editions)
-            logger.info(f"PDF selected: {selected_pdf}")
+        if available_years:
+            selected_year = st.selectbox("📅 Select Year:", ["All Years"] + available_years)
+            logger.info(f"Year selected: {selected_year}")
         else:
-            selected_pdf = "All"
-            st.warning("No editions found matching the selected criteria")
-            logger.warning("No editions found matching the selected criteria")
-    else:
-        # Fallback to original behavior when no specific filters are applied
-        logger.info("Using fallback PDF selection (no filters applied)")
-        pdf_names = collection.distinct("pdf_name")
-        logger.info(f"Found {len(pdf_names)} total PDFs: {pdf_names}")
-        selected_pdf = st.selectbox("📚 Select PDF:", ["All"] + pdf_names)
-        logger.info(f"PDF selected: {selected_pdf}")
+            selected_year = "All Years"
+            st.warning("No year data found in the database")
+            logger.warning("No year data found in the database")
+    
+    # Compact filter layout - Row 2: Content and PDF filters
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        # Have Summary filter
+        logger.info("Processing summary filter across all years")
+        
+        # Build base query for summary counting (excluding year filter)
+        base_query = {}
+        if selected_authors:
+            base_query["Author"] = {"$in": selected_authors}
+        
+        # Count documents with and without content_summary across all years
+        logger.debug(f"Base query for summary counting: {base_query}")
+        all_docs = list(collection.find(base_query, {"content_summary": 1}))
+        logger.info(f"Found {len(all_docs)} documents for summary counting")
+        
+        # Count documents with and without content_summary
+        has_summary_count = sum(1 for doc in all_docs if doc.get('content_summary'))
+        no_summary_count = len(all_docs) - has_summary_count
+        logger.info(f"Summary counts - Has summary: {has_summary_count}, No summary: {no_summary_count}")
+        
+        summary_options = []
+        if has_summary_count > 0:
+            summary_options.append(f"✅ Yes ({has_summary_count} articles)")
+        if no_summary_count > 0:
+            summary_options.append(f"❌ No ({no_summary_count} articles)")
+        
+        if summary_options:
+            selected_summary = st.selectbox("📝 Have Summary:", ["All"] + summary_options)
+            logger.info(f"Summary filter selected: {selected_summary}")
+        else:
+            selected_summary = "All"
+            st.warning("No articles found in the database")
+            logger.warning("No articles found in the database")
+    
+    with col2:
+        # PDF filter - Check if any filters are applied
+        any_filters_applied = (
+            selected_authors or 
+            summary_status_filter != "All" or 
+            original_article_status_filter != "All" or
+            selected_year != "All Years" or 
+            selected_summary != "All"
+        )
+        
+        if any_filters_applied:
+            logger.info(f"Processing PDF selection with filters - Authors: {selected_authors}, Summary Status: {summary_status_filter}, Original Article Status: {original_article_status_filter}, Year: {selected_year}, Summary: {selected_summary}")
+            
+            # Build comprehensive query based on ALL selections
+            query = {}
+            
+            # Add author filter if selected
+            if selected_authors:
+                query["Author"] = {"$in": selected_authors}
+            
+            # Add year filter if selected
+            if selected_year != "All Years":
+                query["Year"] = selected_year
+            
+            # Add summary filter if selected
+            if selected_summary != "All":
+                want_summary = selected_summary.startswith("✅")
+                logger.info(f"Want summary: {want_summary}")
+                if want_summary:
+                    query["content_summary"] = {"$exists": True, "$ne": ""}
+                else:
+                    query["$or"] = [
+                        {"content_summary": {"$exists": False}},
+                        {"content_summary": ""},
+                        {"content_summary": None}
+                    ]
+            
+            # Add summary review status filter if selected
+            if summary_status_filter != "All":
+                if summary_status_filter == "🟡 Pending":
+                    query["$or"] = [
+                        {"summary_review_status": {"$exists": False}},
+                        {"summary_review_status": None},
+                        {"summary_review_status": ""},
+                        {"summary_review_status": "pending"}
+                    ]
+                elif summary_status_filter == "🟢 Accepted":
+                    query["summary_review_status"] = "accepted"
+                elif summary_status_filter == "🔴 Rejected":
+                    query["summary_review_status"] = "rejected"
+            
+            # Add original article review status filter if selected
+            if original_article_status_filter != "All":
+                if original_article_status_filter == "🟡 Pending":
+                    query["$or"] = [
+                        {"orgnl_artcl_rv_sts": {"$exists": False}},
+                        {"orgnl_artcl_rv_sts": None},
+                        {"orgnl_artcl_rv_sts": ""},
+                        {"orgnl_artcl_rv_sts": "pending"}
+                    ]
+                elif original_article_status_filter == "🟢 Accepted":
+                    query["orgnl_artcl_rv_sts"] = "accepted"
+                elif original_article_status_filter == "🔴 Rejected":
+                    query["orgnl_artcl_rv_sts"] = "rejected"
+            
+            logger.debug(f"PDF selection query: {query}")
+            
+            # Get unique pdf_names for the filtered documents
+            available_editions = sorted(collection.distinct("pdf_name", query))
+            logger.info(f"Found {len(available_editions)} editions: {available_editions}")
+            
+            if available_editions:
+                selected_pdf = st.selectbox("📚 Select Available Editions:", ["All"] + available_editions)
+                logger.info(f"PDF selected: {selected_pdf}")
+            else:
+                selected_pdf = "All"
+                st.warning("No editions found matching the selected criteria")
+                logger.warning("No editions found matching the selected criteria")
+        else:
+            # Fallback to original behavior when no specific filters are applied
+            logger.info("Using fallback PDF selection (no filters applied)")
+            pdf_names = collection.distinct("pdf_name")
+            logger.info(f"Found {len(pdf_names)} total PDFs: {pdf_names}")
+            selected_pdf = st.selectbox("📚 Select PDF:", ["All"] + pdf_names)
+            logger.info(f"PDF selected: {selected_pdf}")
+    
+    with col3:
+        # Search with UUID filter
+        uuid_search = st.text_input(
+            "🔍 Search with UUID:",
+            placeholder="Enter UUID to search...",
+            help="Enter a specific UUID to find a particular article"
+        )
+        logger.info(f"UUID search entered: {uuid_search}")
+    
+    with col4:
+        # Empty column for future use
+        pass
 
     # Reset to page 1 if PDF selection changes
     logger.info("Managing pagination state")
@@ -389,6 +407,11 @@ if page == "📂 View Extracted Articles":
         and_conditions.append({"pdf_name": selected_pdf})
         logger.debug(f"Added PDF filter: {selected_pdf}")
     
+    # Apply UUID search filter
+    if uuid_search and uuid_search.strip():
+        and_conditions.append({"uuid": {"$regex": uuid_search.strip(), "$options": "i"}})
+        logger.debug(f"Added UUID search filter: {uuid_search.strip()}")
+    
     # Build final query
     if and_conditions:
         if len(and_conditions) == 1:
@@ -447,6 +470,12 @@ if page == "📂 View Extracted Articles":
                 filter_info.append("📝 Has Summary: No")
             if "pdf_name" in final_query:
                 filter_info.append(f"📚 Edition: {final_query['pdf_name']}")
+            if "uuid" in final_query:
+                filter_info.append(f"🔍 UUID: {final_query['uuid']['$regex']}")
+        
+        # Add UUID search to filter info if it's active
+        if uuid_search and uuid_search.strip():
+            filter_info.append(f"🔍 UUID Search: {uuid_search.strip()}")
         
         if filter_info:
             # Add total articles count to the filter info
@@ -1086,9 +1115,195 @@ if page == "📂 View Extracted Articles":
                         
                         st.markdown(f"**Recommendations:** {llm_review.get('recommendations', 'N/A')}")
                 
+                # Lock Content for Publish section
+                article_id = article.get('_id')
+                locked_title = article.get('locked_title_for_publish')
+                locked_content = article.get('locked_content_for_publish')
+                
+                # Initialize session state for lock interfaces if not exists
+                if f"show_title_lock_{article_id}" not in st.session_state:
+                    st.session_state[f"show_title_lock_{article_id}"] = False
+                if f"show_content_lock_{article_id}" not in st.session_state:
+                    st.session_state[f"show_content_lock_{article_id}"] = False
+                
+                # Display current lock status
+                title_status = "Not Locked"
+                if locked_title == "Title":
+                    title_status = "Original Title"
+                elif locked_title == "current_title":
+                    title_status = "Current Title"
+                
+                content_status = "Not Locked"
+                if locked_content == "content_summary":
+                    content_status = "Content Summary"
+                elif locked_content == "current_summary":
+                    content_status = "Current Content Summary"
+                elif locked_content == "Content":
+                    content_status = "Original Content"
+                elif locked_content == "current_origina_article":
+                    content_status = "Current Original Article"
+                
+                # Lock status and buttons in 2-column layout with color highlighting
+                status_col1, status_col2 = st.columns(2)
+                
+                with status_col1:
+                    # Color-coded title status
+                    if locked_title:
+                        title_color = "🟢"  # Green for locked
+                        title_bg_color = "background-color: #d4edda; border: 2px solid #28a745; padding: 8px; border-radius: 5px; color: #155724;"
+                    else:
+                        title_color = "🔴"  # Red for not locked
+                        title_bg_color = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 5px; color: #721c24;"
+                    
+                    st.markdown(f"""
+                    <div style="{title_bg_color}">
+                        <strong>{title_color} Title Locked:</strong> {title_status}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Color-coded title button
+                    if locked_title:
+                        if st.button("🔓 Unlock Title", key=f"unlock_title_{article_id}", type="secondary"):
+                            logger.info(f"Unlock title button clicked for article {article_id}")
+                            try:
+                                collection.update_one(
+                                    {"_id": article_id},
+                                    {"$unset": {"locked_title_for_publish": ""}}
+                                )
+                                st.success("✅ Title unlocked successfully!")
+                                logger.info(f"Successfully unlocked title for article {article_id}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to unlock title: {str(e)}")
+                                logger.error(f"Failed to unlock title for article {article_id}: {str(e)}")
+                    else:
+                        if st.button("🔒 Lock Title", key=f"lock_title_{article_id}", type="primary"):
+                            logger.info(f"Lock title button clicked for article {article_id}")
+                            st.session_state[f"show_title_lock_{article_id}"] = True
+                
+                with status_col2:
+                    # Color-coded content status
+                    if locked_content:
+                        content_color = "🟢"  # Green for locked
+                        content_bg_color = "background-color: #d4edda; border: 2px solid #28a745; padding: 8px; border-radius: 5px; color: #155724;"
+                    else:
+                        content_color = "🔴"  # Red for not locked
+                        content_bg_color = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 5px; color: #721c24;"
+                    
+                    st.markdown(f"""
+                    <div style="{content_bg_color}">
+                        <strong>{content_color} Content Locked:</strong> {content_status}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Color-coded content button
+                    if locked_content:
+                        if st.button("🔓 Unlock Content", key=f"unlock_content_{article_id}", type="secondary"):
+                            logger.info(f"Unlock content button clicked for article {article_id}")
+                            try:
+                                collection.update_one(
+                                    {"_id": article_id},
+                                    {"$unset": {"locked_content_for_publish": ""}}
+                                )
+                                st.success("✅ Content unlocked successfully!")
+                                logger.info(f"Successfully unlocked content for article {article_id}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to unlock content: {str(e)}")
+                                logger.error(f"Failed to unlock content for article {article_id}: {str(e)}")
+                    else:
+                        if st.button("🔒 Lock Content", key=f"lock_content_{article_id}", type="primary"):
+                            logger.info(f"Lock content button clicked for article {article_id}")
+                            st.session_state[f"show_content_lock_{article_id}"] = True
+                
+                logger.debug(f"Article {i+1} - Title locked: {locked_title}, Content locked: {locked_content}")
+                
+                # Title lock selection - only show when user clicks lock button
+                if st.session_state.get(f"show_title_lock_{article_id}", False):
+                    st.info("Select which title to lock for publishing:")
+                    title_option = st.selectbox(
+                        "Choose title to lock:",
+                        ["Title", "current_title"],
+                        index=0 if locked_title == "Title" else 1 if locked_title == "current_title" else 0,
+                        key=f"title_select_{article_id}"
+                    )
+                    
+                    confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                    
+                    with confirm_col1:
+                        if st.button("✅ Lock Title", key=f"confirm_title_lock_{article_id}", type="primary"):
+                            logger.info(f"Confirming title lock for article {article_id}: {title_option}")
+                            
+                            # Check if the selected field has content
+                            field_value = article.get(title_option, '')
+                            if not field_value or not field_value.strip():
+                                st.warning(f"⚠️ Warning: The selected field '{title_option}' is empty or doesn't exist. Are you sure you want to lock to an empty field?")
+                                logger.warning(f"User trying to lock to empty field {title_option} for article {article_id}")
+                                # Don't proceed with the lock, just show warning
+                            else:
+                                try:
+                                    collection.update_one(
+                                        {"_id": article_id},
+                                        {"$set": {"locked_title_for_publish": title_option}}
+                                    )
+                                    st.success(f"✅ Title locked to {title_option}!")
+                                    logger.info(f"Successfully locked title for article {article_id} to {title_option}")
+                                    st.session_state[f"show_title_lock_{article_id}"] = False
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Failed to lock title: {str(e)}")
+                                    logger.error(f"Failed to lock title for article {article_id}: {str(e)}")
+                    
+                    with confirm_col2:
+                        if st.button("❌ Cancel", key=f"cancel_title_lock_{article_id}"):
+                            logger.info(f"Cancelled title lock for article {article_id}")
+                            st.session_state[f"show_title_lock_{article_id}"] = False
+                            st.rerun()
+                
+                # Content lock selection
+                if st.session_state.get(f"show_content_lock_{article_id}", False):
+                    st.info("Select which content to lock for publishing:")
+                    content_option = st.selectbox(
+                        "Choose content to lock:",
+                        ["content_summary", "current_summary", "Content", "current_origina_article"],
+                        index=0 if locked_content == "content_summary" else 1 if locked_content == "current_summary" else 2 if locked_content == "Content" else 3 if locked_content == "current_origina_article" else 0,
+                        key=f"content_select_{article_id}"
+                    )
+                    
+                    confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 1])
+                    
+                    with confirm_col1:
+                        if st.button("✅ Lock Content", key=f"confirm_content_lock_{article_id}", type="primary"):
+                            logger.info(f"Confirming content lock for article {article_id}: {content_option}")
+                            
+                            # Check if the selected field has content
+                            field_value = article.get(content_option, '')
+                            if not field_value or not field_value.strip():
+                                st.warning(f"⚠️ Warning: The selected field '{content_option}' is empty or doesn't exist. Are you sure you want to lock to an empty field?")
+                                logger.warning(f"User trying to lock to empty field {content_option} for article {article_id}")
+                                # Don't proceed with the lock, just show warning
+                            else:
+                                try:
+                                    collection.update_one(
+                                        {"_id": article_id},
+                                        {"$set": {"locked_content_for_publish": content_option}}
+                                    )
+                                    st.success(f"✅ Content locked to {content_option}!")
+                                    logger.info(f"Successfully locked content for article {article_id} to {content_option}")
+                                    st.session_state[f"show_content_lock_{article_id}"] = False
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Failed to lock content: {str(e)}")
+                                    logger.error(f"Failed to lock content for article {article_id}: {str(e)}")
+                    
+                    with confirm_col2:
+                        if st.button("❌ Cancel", key=f"cancel_content_lock_{article_id}"):
+                            logger.info(f"Cancelled content lock for article {article_id}")
+                            st.session_state[f"show_content_lock_{article_id}"] = False
+                            st.rerun()
+                
                 # Ready to Publish section
                 ready_to_publish_value = article.get('ready_to_publish_ananth', False)
-                article_id = article.get('_id')
                 publish_confirm_key = f"publish_confirm_{article_id}"
                 publish_final_key = f"publish_final_{article_id}"
                 
