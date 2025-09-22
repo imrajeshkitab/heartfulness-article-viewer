@@ -741,7 +741,23 @@ if page == "📂 View Extracted Articles":
                     if article.get('content_summary'):
                         logger.debug(f"Article {i+1} has content summary, displaying review interface")
                         with st.expander("Content Summary", expanded=False):
-                            st.markdown(article.get('content_summary', ''))
+                            content_summary_text = article.get('content_summary', '')
+                            st.markdown(content_summary_text)
+                            
+                            # Download and Copy buttons for Content Summary
+                            summary_col1, summary_col2 = st.columns(2)
+                            with summary_col1:
+                                st.download_button(
+                                    "📥 Download .txt",
+                                    content_summary_text,
+                                    file_name=f"content_summary_{article.get('uuid', 'unknown')}.txt",
+                                    mime="text/plain",
+                                    key=f"download_summary_{article_id}"
+                                )
+                            with summary_col2:
+                                if st.button("📋 Copy", key=f"copy_summary_{article_id}"):
+                                    st.write("Content copied to clipboard!")
+                                    st.code(content_summary_text, language="text")
                             
                             # Show current review status
                             current_status = article.get('summary_review_status', 'pending')
@@ -818,8 +834,24 @@ if page == "📂 View Extracted Articles":
                                         st.rerun()
                     
                     with st.expander("Original Content"):
-                        st.write(article.get("Content", ""))
+                        original_content_text = article.get("Content", "")
+                        st.write(original_content_text)
                         logger.debug(f"Article {i+1} content displayed")
+                        
+                        # Download and Copy buttons for Original Content
+                        content_col1, content_col2 = st.columns(2)
+                        with content_col1:
+                            st.download_button(
+                                "📥 Download .txt",
+                                original_content_text,
+                                file_name=f"original_content_{article.get('uuid', 'unknown')}.txt",
+                                mime="text/plain",
+                                key=f"download_original_{article_id}"
+                            )
+                        with content_col2:
+                            if st.button("📋 Copy", key=f"copy_original_{article_id}"):
+                                st.write("Content copied to clipboard!")
+                                st.code(original_content_text, language="text")
                         
                         # Show current original article review status
                         current_article_status = article.get('orgnl_artcl_rv_sts', 'pending')
@@ -986,6 +1018,21 @@ if page == "📂 View Extracted Articles":
                             if current_summary and current_summary.strip():
                                 st.markdown(current_summary)
                                 logger.debug(f"Article {i+1} current summary displayed")
+                                
+                                # Download and Copy buttons for Current Content Summary
+                                current_summary_col1, current_summary_col2 = st.columns(2)
+                                with current_summary_col1:
+                                    st.download_button(
+                                        "📥 Download .txt",
+                                        current_summary,
+                                        file_name=f"current_summary_{article.get('uuid', 'unknown')}.txt",
+                                        mime="text/plain",
+                                        key=f"download_current_summary_{article_id}"
+                                    )
+                                with current_summary_col2:
+                                    if st.button("📋 Copy", key=f"copy_current_summary_{article_id}"):
+                                        st.write("Content copied to clipboard!")
+                                        st.code(current_summary, language="text")
                             else:
                                 st.info("No modified version yet")
                                 logger.debug(f"Article {i+1} has no current summary")
@@ -1085,6 +1132,21 @@ if page == "📂 View Extracted Articles":
                             if current_original_article and current_original_article.strip():
                                 st.write(current_original_article)
                                 logger.debug(f"Article {i+1} current original article displayed")
+                                
+                                # Download and Copy buttons for Current Original Article
+                                current_article_col1, current_article_col2 = st.columns(2)
+                                with current_article_col1:
+                                    st.download_button(
+                                        "📥 Download .txt",
+                                        current_original_article,
+                                        file_name=f"current_original_article_{article.get('uuid', 'unknown')}.txt",
+                                        mime="text/plain",
+                                        key=f"download_current_article_{article_id}"
+                                    )
+                                with current_article_col2:
+                                    if st.button("📋 Copy", key=f"copy_current_article_{article_id}"):
+                                        st.write("Content copied to clipboard!")
+                                        st.code(current_original_article, language="text")
                             else:
                                 st.info("No modified version yet")
                                 logger.debug(f"Article {i+1} has no current original article")
