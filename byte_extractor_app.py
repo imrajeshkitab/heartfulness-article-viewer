@@ -34,7 +34,8 @@ logger.info("Streamlit page configuration set successfully")
 logger.info("Setting up sidebar navigation")
 st.sidebar.title("📚 Heartfulness Extractor")
 page = st.sidebar.radio("Navigation", [
-    "📂 View Extracted Articles"
+    "📂 View Extracted Articles",
+    "📊 Article Comparison Viewer"
 ])
 logger.info(f"Selected page: {page}")
 
@@ -1450,4 +1451,20 @@ if page == "📂 View Extracted Articles":
             st.session_state.page_number += 1
     
     logger.info("View Extracted Articles page rendering completed")
+
+# -------------------------
+# Article Comparison Viewer
+# -------------------------
+elif page == "📊 Article Comparison Viewer":
+    logger.info("Rendering Article Comparison Viewer page")
+    st.title("📊 Article Comparison Viewer")
+    st.markdown("Compare original articles with their summaries side by side.")
+    
+    # Read and embed the HTML file
+    html_file_path = Path(__file__).parent / "article_comparison_viewer.html"
+    with open(html_file_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    
+    # Embed the HTML component with full height
+    st.components.v1.html(html_content, height=800, scrolling=True)
 

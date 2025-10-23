@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Comparison Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 100%;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .upload-section h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .upload-groups {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .upload-group {
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+        }
+
+        .upload-group h3 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 20px;
+            border: 3px dashed #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f9f9f9;
+        }
+
+        .file-input-label:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .file-input-label.dragover {
+            border-color: #667eea;
+            background: #e8f2ff;
+        }
+
+        .file-list {
+            margin-top: 15px;
+            text-align: left;
+        }
+
+        .file-item {
+            padding: 8px 12px;
+            background: #f0f0f0;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .start-button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s ease;
+        }
+
+        .start-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .start-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .viewer-section {
+            display: none;
+            background: white;
+            border-radius: 0;
+            overflow: hidden;
+            box-shadow: none;
+            flex: 1;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .viewer-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewer-title {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .viewer-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .nav-button {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .nav-button:hover:not(:disabled) {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .nav-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sidebar-toggle {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .viewer-content {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 2px solid #e9ecef;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            border-right: none;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .file-list-sidebar {
+            padding: 10px;
+        }
+
+        .file-list-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-radius: 8px;
+            margin: 5px 0;
+            transition: all 0.2s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .file-list-item:hover {
+            background: #e9ecef;
+        }
+
+        .file-list-item.active {
+            background: #667eea;
+            color: white;
+            border-left-color: #764ba2;
+        }
+
+        .file-list-item-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .file-list-item-status {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .book-view {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+        }
+
+        .page {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 2px solid #e9ecef;
+            min-width: 0;
+        }
+
+        .page:last-child {
+            border-right: none;
+        }
+
+        .page-header {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e9ecef;
+            color: #495057;
+        }
+
+        .page-content {
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .page-content h1, .page-content h2, .page-content h3 {
+            color: #2c3e50;
+            margin: 15px 0 10px 0;
+        }
+
+        .page-content h1 {
+            font-size: 1.8em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .page-content h2 {
+            font-size: 1.4em;
+            color: #667eea;
+        }
+
+        .page-content h3 {
+            font-size: 1.1em;
+            color: #764ba2;
+        }
+
+        .page-content p {
+            margin-bottom: 12px;
+        }
+
+        .page-content ul, .page-content ol {
+            margin: 12px 0;
+            padding-left: 25px;
+        }
+
+        .page-content li {
+            margin-bottom: 6px;
+        }
+
+        .page-content blockquote {
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+            margin: 15px 0;
+            font-style: italic;
+            color: #666;
+        }
+
+        .page-content code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #e74c3c;
+        }
+
+        .page-content pre {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .page-content pre code {
+            background: none;
+            padding: 0;
+            color: #333;
+        }
+
+        .no-content {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 30px 20px;
+        }
+
+        .current-file-info {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .upload-groups {
+                flex-direction: column;
+            }
+            
+            .viewer-content {
+                flex-direction: column;
+                height: calc(100vh - 80px);
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                flex-shrink: 0;
+            }
+            
+            .sidebar.collapsed {
+                height: 0;
+                width: 100%;
+            }
+            
+            .book-view {
+                flex-direction: column;
+                flex: 1;
+            }
+            
+            .page {
+                border-right: none;
+                border-bottom: 2px solid #e9ecef;
+                min-height: 50vh;
+            }
+            
+            .page:last-child {
+                border-bottom: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Upload Section -->
+        <div class="upload-section" id="uploadSection">
+            <h1>📚 Article Comparison Viewer</h1>
+            <div class="upload-groups">
+                <div class="upload-group">
+                    <h3>📄 Original Articles</h3>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="originalFiles" class="file-input" multiple accept=".md">
+                        <label for="originalFiles" class="file-input-label" id="originalLabel">
+                            <div>📁 Click to select or drag & drop</div>
+                            <div style="font-size: 0.9em; margin-top: 10px; color: #666;">
+                                Select multiple .md files from @original/ folder
+                            </div>
+                        </label>
+                    </div>
+                    <div class="file-list" id="originalFileList"></div>
+                </div>
+                
+                <div class="upload-group">
+                    <h3>📝 Summary Articles</h3>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="summaryFiles" class="file-input" multiple accept=".md">
+                        <label for="summaryFiles" class="file-input-label" id="summaryLabel">
+                            <div>📁 Click to select or drag & drop</div>
+                            <div style="font-size: 0.9em; margin-top: 10px; color: #666;">
+                                Select multiple .md files from @summary/ folder
+                            </div>
+                        </label>
+                    </div>
+                    <div class="file-list" id="summaryFileList"></div>
+                </div>
+            </div>
+            <button class="start-button" id="startButton" disabled>Start Comparison</button>
+        </div>
+
+        <!-- Viewer Section -->
+        <div class="viewer-section" id="viewerSection">
+            <div class="viewer-header">
+                <div class="viewer-title">Article Comparison</div>
+                <div class="viewer-controls">
+                    <button class="sidebar-toggle" id="sidebarToggle">📋 Files</button>
+                    <button class="nav-button" id="prevButton">← Previous</button>
+                    <button class="nav-button" id="nextButton">Next →</button>
+                </div>
+            </div>
+            
+            <div class="viewer-content">
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-header">File List</div>
+                    <div class="file-list-sidebar" id="fileListSidebar"></div>
+                </div>
+                
+                <div class="book-view">
+                    <div class="page">
+                        <div class="page-header">📄 Original Article</div>
+                        <div class="page-content" id="originalContent">
+                            <div class="no-content">No content loaded</div>
+                        </div>
+                    </div>
+                    
+                    <div class="page">
+                        <div class="page-header">📝 Summary</div>
+                        <div class="page-content" id="summaryContent">
+                            <div class="no-content">No content loaded</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ArticleComparisonViewer {
+            constructor() {
+                this.originalFiles = new Map();
+                this.summaryFiles = new Map();
+                this.matchedPairs = [];
+                this.currentIndex = 0;
+                
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                // File input listeners
+                document.getElementById('originalFiles').addEventListener('change', (e) => this.handleFileUpload(e, 'original'));
+                document.getElementById('summaryFiles').addEventListener('change', (e) => this.handleFileUpload(e, 'summary'));
+                
+                // Drag and drop listeners
+                ['originalLabel', 'summaryLabel'].forEach(id => {
+                    const element = document.getElementById(id);
+                    element.addEventListener('dragover', (e) => this.handleDragOver(e));
+                    element.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+                    element.addEventListener('drop', (e) => this.handleDrop(e, id));
+                });
+                
+                // Button listeners
+                document.getElementById('startButton').addEventListener('click', () => this.startComparison());
+                document.getElementById('prevButton').addEventListener('click', () => this.previousArticle());
+                document.getElementById('nextButton').addEventListener('click', () => this.nextArticle());
+                document.getElementById('sidebarToggle').addEventListener('click', () => this.toggleSidebar());
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                e.currentTarget.classList.add('dragover');
+            }
+
+            handleDragLeave(e) {
+                e.currentTarget.classList.remove('dragover');
+            }
+
+            handleDrop(e, labelId) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('dragover');
+                
+                const files = Array.from(e.dataTransfer.files).filter(file => file.name.endsWith('.md'));
+                const inputId = labelId === 'originalLabel' ? 'originalFiles' : 'summaryFiles';
+                const input = document.getElementById(inputId);
+                
+                // Create a new FileList
+                const dt = new DataTransfer();
+                files.forEach(file => dt.items.add(file));
+                input.files = dt.files;
+                
+                this.handleFileUpload({ target: input }, labelId === 'originalLabel' ? 'original' : 'summary');
+            }
+
+            handleFileUpload(event, type) {
+                const files = Array.from(event.target.files);
+                const fileMap = type === 'original' ? this.originalFiles : this.summaryFiles;
+                const fileListId = type === 'original' ? 'originalFileList' : 'summaryFileList';
+                
+                // Clear existing files
+                fileMap.clear();
+                
+                // Add new files
+                files.forEach(file => {
+                    fileMap.set(file.name, file);
+                });
+                
+                // Update UI
+                this.updateFileList(fileListId, Array.from(fileMap.keys()));
+                this.updateStartButton();
+            }
+
+            updateFileList(listId, fileNames) {
+                const fileList = document.getElementById(listId);
+                fileList.innerHTML = '';
+                
+                fileNames.forEach(fileName => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.textContent = fileName;
+                    fileList.appendChild(fileItem);
+                });
+            }
+
+            updateStartButton() {
+                const startButton = document.getElementById('startButton');
+                startButton.disabled = this.originalFiles.size === 0 || this.summaryFiles.size === 0;
+            }
+
+            startComparison() {
+                this.matchFiles();
+                if (this.matchedPairs.length === 0) {
+                    alert('No matching files found between original and summary folders.');
+                    return;
+                }
+                
+                // Show viewer section
+                document.getElementById('uploadSection').style.display = 'none';
+                document.getElementById('viewerSection').style.display = 'block';
+                
+                // Initialize viewer
+                this.updateSidebar();
+                this.displayCurrentArticle();
+            }
+
+            matchFiles() {
+                this.matchedPairs = [];
+                
+                for (const [originalName, originalFile] of this.originalFiles) {
+                    // Try to find matching summary file
+                    const baseName = originalName.replace(/\.md$/, '');
+                    let summaryFile = null;
+                    
+                    // First try exact match
+                    if (this.summaryFiles.has(originalName)) {
+                        summaryFile = this.summaryFiles.get(originalName);
+                    } else {
+                        // Try to find by base name (without extension)
+                        for (const [summaryName, file] of this.summaryFiles) {
+                            if (summaryName.replace(/\.md$/, '') === baseName) {
+                                summaryFile = file;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (summaryFile) {
+                        this.matchedPairs.push({
+                            original: originalFile,
+                            summary: summaryFile,
+                            originalName: originalName,
+                            summaryName: summaryFile.name
+                        });
+                    }
+                }
+            }
+
+            updateSidebar() {
+                const sidebar = document.getElementById('fileListSidebar');
+                sidebar.innerHTML = '';
+                
+                this.matchedPairs.forEach((pair, index) => {
+                    const item = document.createElement('div');
+                    item.className = `file-list-item ${index === this.currentIndex ? 'active' : ''}`;
+                    item.addEventListener('click', () => this.goToArticle(index));
+                    
+                    item.innerHTML = `
+                        <div class="file-list-item-name">${pair.originalName}</div>
+                        <div class="file-list-item-status">✓ Matched with ${pair.summaryName}</div>
+                    `;
+                    
+                    sidebar.appendChild(item);
+                });
+            }
+
+            displayCurrentArticle() {
+                if (this.matchedPairs.length === 0) return;
+                
+                const currentPair = this.matchedPairs[this.currentIndex];
+                
+                // Update navigation buttons
+                document.getElementById('prevButton').disabled = this.currentIndex === 0;
+                document.getElementById('nextButton').disabled = this.currentIndex === this.matchedPairs.length - 1;
+                
+                // Update sidebar
+                this.updateSidebar();
+                
+                // Load and display content
+                this.loadFileContent(currentPair.original, 'originalContent');
+                this.loadFileContent(currentPair.summary, 'summaryContent');
+            }
+
+            async loadFileContent(file, contentId) {
+                const content = document.getElementById(contentId);
+                content.innerHTML = '<div class="no-content">Loading...</div>';
+                
+                try {
+                    const text = await this.readFileAsText(file);
+                    const html = marked.parse(text);
+                    content.innerHTML = html;
+                } catch (error) {
+                    content.innerHTML = '<div class="no-content">Error loading file</div>';
+                    console.error('Error loading file:', error);
+                }
+            }
+
+            readFileAsText(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsText(file);
+                });
+            }
+
+            previousArticle() {
+                if (this.currentIndex > 0) {
+                    this.currentIndex--;
+                    this.displayCurrentArticle();
+                }
+            }
+
+            nextArticle() {
+                if (this.currentIndex < this.matchedPairs.length - 1) {
+                    this.currentIndex++;
+                    this.displayCurrentArticle();
+                }
+            }
+
+            goToArticle(index) {
+                this.currentIndex = index;
+                this.displayCurrentArticle();
+            }
+
+            toggleSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('collapsed');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new ArticleComparisonViewer();
+        });
+    </script>
+</body>
+</html>
